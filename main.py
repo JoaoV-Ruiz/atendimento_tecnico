@@ -4,10 +4,19 @@ from dotenv import load_dotenv
 import os
 import pytz
 from datetime import datetime
-# Configuração do Fuso
+
+# Configuração do fuso
 fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
+# ESSE PRINT VAI APARECER NO LOG PARA VOCÊ CONFERIR
+print(f"--- CHECK DE HORA ---")
+print(f"Hora do Servidor (Log): {datetime.now().strftime('%H:%M:%S')}")
+print(f"Hora de Brasília (Python): {agora.strftime('%H:%M:%S')}")
+print(f"---------------------")
+
+# Exiba no rodapé do site também para você ficar tranquilo
+st.sidebar.write(f"🕒 Hora Brasília: {agora.strftime('%H:%M:%S')}")
 # Defina o horário do gatilho
 HORA_ALVO = 16
 MINUTO_ALVO = 15
