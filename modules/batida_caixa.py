@@ -6,10 +6,6 @@ import json
 from datetime import datetime
 import os
 
-# Puxando variáveis de ambiente (carregadas no main.py)
-URL_BANCO = os.getenv("SPREADSHEET_URL")
-JSON_PATH = os.getenv("GOOGLE_JSON_PATH")
-
 def render():
     # Puxa a versão atual do cache para garantir que os widgets resetem visualmente
     v = st.session_state.batida_version
@@ -33,21 +29,26 @@ def render():
             atualizar_portas()
 
     def conectar_google_sheets():
+        """ Conecta ao Google Sheets e retorna a primeira aba da planilha """
         try:
-            # Lê a string do JSON direto dos segredos do Streamlit
+            # Lê as credenciais JSON direto dos Secrets do Streamlit
             creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
             
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             client = gspread.authorize(creds)
-            return client
+            
+            # Abre a planilha pela URL definida nos Secrets
+            planilha = client.open_by_url(st.secrets["SPREADSHEET_URL"])
+            
+            # Retorna a primeira aba (worksheet)
+            return planilha.get_worksheet(0)
         except Exception as e:
             st.error(f"Erro na conexão com Google Sheets: {e}")
             return None
 
     def limpar_campos():
         """ Limpa os dados permanentes, incrementa versão e deleta chaves temporárias """
-        # Limpeza das chaves permanentes no main state
         campos_texto = ['batida_proto', 'batida_tec', 'batida_cx', 'anot_batida']
         for c in campos_texto:
             st.session_state[c] = ""
@@ -58,16 +59,12 @@ def render():
             st.session_state[f"c_batida_{i}"] = False
         
         st.session_state.portas = []
-
-        # Incrementa versão para forçar widgets a nascerem vazios
         st.session_state.batida_version += 1
         
-        # Deleta chaves temp antigas para não dar conflito
         for key in list(st.session_state.keys()):
             if key.startswith('temp_'):
                 del st.session_state[key]
         
-        # Força o recarregamento imediato
         st.rerun()
 
     st.title("📦 BATIDA DE CAIXA 3000")
@@ -121,7 +118,6 @@ def render():
         st.text_area("Notas", value=st.session_state.anot_batida, height=100, 
                      key=f"temp_anot_batida_{v}", on_change=salvar_campo, args=("anot_batida",), label_visibility="collapsed")
         
-        # Gerar string do relatório lendo do cache permanente
         res = (f"Protocolo: {st.session_state.batida_proto}\n"
                f"Técnico: {st.session_state.batida_tec}\n"
                f"Caixa: {st.session_state.batida_cx}\n"
@@ -136,7 +132,6 @@ def render():
         
         st.text_area("Relatório Final", res, height=250, label_visibility="collapsed")
         
-        # Botão de Cópia JavaScript
         js_copy = json.dumps(res)
         components.html(f"""
             <button id="cp" style="width:100%; height:40px; background:#4da3ff; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-family:sans-serif;">📋 COPIAR RELATÓRIO</button>
@@ -156,8 +151,8 @@ def render():
             else:
                 try:
                     with st.spinner('Salvando dados...'):
-                        sheet = conectar_google_sheets()
-                        if sheet:
+                        aba_planilha = conectar_google_sheets()
+                        if aba_planilha:
                             data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
                             linha = [
                                 data_hora, 
@@ -166,7 +161,8 @@ def render():
                                 portas_str, 
                                 st.session_state.batida_tec
                             ]
-                            sheet.append_row(linha, value_input_option='USER_ENTERED')
+                            # Agora chamamos append_row diretamente no objeto da aba
+                            aba_planilha.append_row(linha, value_input_option='USER_ENTERED')
                             st.toast("Registrado com sucesso!", icon="✅")
                             st.balloons()
                 except Exception as e:
