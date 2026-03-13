@@ -4,16 +4,15 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 from datetime import datetime
-import os
-import pytz
+import pytz # Certifique-se de que 'pytz' esteja no seu requirements.txt
 
 def render():
     # Puxa a versão atual do cache para garantir que os widgets resetem visualmente
     v = st.session_state.batida_version
 
-    # --- 1. FUNÇÕES DE SINCRONIZAÇÃO E SUPORTE ---
+    # --- 1. FUNÇÕES DE SUPORTE ---
     def salvar_campo(chave_permanente):
-        """ Sincroniza o widget temp (com versão) com a memória permanente, se existir """
+        """ Sincroniza o widget temp (com versão) com a memória permanente """
         key_temp = f"temp_{chave_permanente}_{v}"
         if key_temp in st.session_state:
             st.session_state[chave_permanente] = st.session_state[key_temp]
@@ -23,33 +22,31 @@ def render():
         st.session_state.portas = [f"{i+1:02d}" for i in range(16) if st.session_state.get(f"c_batida_{i}")]
 
     def salvar_checkbox(indice):
-        """ Sincroniza o checkbox temp com o permanente e atualiza a lista """
+        """ Sincroniza o checkbox temp e atualiza a lista de portas """
         key_temp = f"temp_c_batida_{indice}_{v}"
         if key_temp in st.session_state:
             st.session_state[f"c_batida_{indice}"] = st.session_state[key_temp]
             atualizar_portas()
 
     def conectar_google_sheets():
-        """ Conecta ao Google Sheets e retorna a primeira aba da planilha """
+        """ Conecta ao Google Sheets e retorna a aba configurada """
         try:
-            # Lê as credenciais JSON direto dos Secrets do Streamlit
+            # Lê as credenciais JSON direto dos Secrets
             creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
             
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             client = gspread.authorize(creds)
             
-            # Abre a planilha pela URL definida nos Secrets
+            # Abre a planilha pela URL nos Secrets e seleciona a primeira aba
             planilha = client.open_by_url(st.secrets["SPREADSHEET_URL"])
-            
-            # Retorna a primeira aba (worksheet)
             return planilha.get_worksheet(0)
         except Exception as e:
             st.error(f"Erro na conexão com Google Sheets: {e}")
             return None
 
     def limpar_campos():
-        """ Limpa os dados permanentes, incrementa versão e deleta chaves temporárias """
+        """ Reseta todos os campos, incrementa versão e recarrega o app """
         campos_texto = ['batida_proto', 'batida_tec', 'batida_cx', 'anot_batida']
         for c in campos_texto:
             st.session_state[c] = ""
@@ -65,12 +62,11 @@ def render():
         for key in list(st.session_state.keys()):
             if key.startswith('temp_'):
                 del st.session_state[key]
-        
         st.rerun()
 
     st.title("📦 BATIDA DE CAIXA 3000")
 
-    # --- 2. CABEÇALHO COM POPOVER DE LIMPEZA ---
+    # --- 2. CABEÇALHO ---
     c1, c2, c3, c_btn = st.columns([2, 2, 1, 0.5])
     with c1: 
         st.text_input("PROTOCOLO", value=st.session_state.batida_proto, 
@@ -84,7 +80,6 @@ def render():
     with c_btn: 
         st.write(" ") 
         confirmar = st.popover("🗑️", help="Limpar tudo")
-        confirmar.warning("⚠️ **Confirmar limpeza total?**")
         if confirmar.button("Sim, apagar tudo!", type="primary", use_container_width=True):
             limpar_campos()
 
@@ -102,18 +97,16 @@ def render():
         for i in range(16):
             r = st.columns(pesos)
             r[0].markdown(f"**{i+1:02d}**")
-            
             for idx, pref in enumerate(['e_b_', 's_b_', 'id_b_'], start=1):
                 k_orig = f"{pref}{i}"
                 r[idx].text_input(f"in_{k_orig}", value=st.session_state[k_orig], 
                                   key=f"temp_{k_orig}_{v}", on_change=salvar_campo, 
                                   args=(k_orig,), label_visibility="collapsed")
-            
             r[4].checkbox(f"l{i}", value=st.session_state[f"c_batida_{i}"], 
                           key=f"temp_c_batida_{i}_{v}", on_change=salvar_checkbox, 
                           args=(i,), label_visibility="collapsed")
 
-    # --- 4. COLUNA LATERAL: ANOTAÇÕES E RELATÓRIO ---
+    # --- 4. COLUNA LATERAL ---
     with col_lateral:
         st.write("**ANOTAÇÕES**")
         st.text_area("Notas", value=st.session_state.anot_batida, height=100, 
@@ -151,20 +144,28 @@ def render():
                 st.error("Protocolo e Caixa são obrigatórios!")
             else:
                 try:
-                    with st.spinner('Salvando dados...'):
-                        aba_planilha = conectar_google_sheets()
-                        if aba_planilha:
-                            # --- CORREÇÃO DO FUSO HORÁRIO AQUI ---
+                    with st.spinner('Enviando para o Google Sheets...'):
+                        aba = conectar_google_sheets()
+                        if aba:
+                            # CORREÇÃO DE HORÁRIO (AMERICA/SAO_PAULO)
                             fuso_br = pytz.timezone('America/Sao_Paulo')
                             data_hora = datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M")
-                            # -------------------------------------
                             
                             linha = [
-                                data_hora, 
-                                st.session_state.batida_proto, 
-                                st.session_state.batida_cx, 
-                                portas_str,
+                                str(data_hora), 
+                                str(st.session_state.batida_proto), 
+                                str(st.session_state.batida_cx), 
+                                str(portas_str), 
                             ]
-                            aba_planilha.append_row(linha, value_input_option='USER_ENTERED')
-                            st.toast("Registrado com sucesso!", icon="✅")
+                            
+                            # append_row com insert_data_option garante que crie uma NOVA linha
+                            aba.append_row(
+                                linha, 
+                                value_input_option='USER_ENTERED',
+                                insert_data_option='INSERT_ROWS'
+                            )
+                            
+                            st.toast(f"Registrado com sucesso às {data_hora}!", icon="✅")
                             st.balloons()
+                except Exception as e:
+                    st.error(f"Erro ao salvar na planilha: {e}")
