@@ -147,5 +147,3 @@ def render():
         with c2:
             st.bar_chart(df_dados.set_index("Colaborador"))
             
-        if st.button("💾 REGISTRAR FECHAMENTO NO GOOGLE SHEETS", use_container_width=True, type="primary"):
-            salvar_fechamento_google_sheets(df_dados, total_tela, total_checados)
