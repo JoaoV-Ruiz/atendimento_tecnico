@@ -30,14 +30,13 @@ def render():
     
     st_autorefresh(interval=5 * 60 * 1000, key="refresh_encerramentos")
     
-    ERP_USER = os.getenv("ERP_USER", "usuario_padrao_aqui")
-    ERP_PASS = os.getenv("ERP_PASS", "senha_padrao_aqui")
+    # Em vez de ERP_USER = os.getenv("ERP_USER")
+    ERP_USER = st.secrets["ERP_USER"]
+    ERP_PASS = st.secrets["ERP_PASS"]
+    DOWNLOAD_FOLDER = st.secrets["DOWNLOAD_PATH"]
+    DESTINO_FOLDER = st.secrets["DESTINO_PATH"]
     # Define a pasta raiz do projeto
     BASE_DIR = Path(__file__).parent
-    # Define onde os CSVs vão morar (dentro da pasta ARQUIVOS_CSV que já aparece no seu print)
-    DESTINO_FOLDER = BASE_DIR / "ARQUIVOS_CSV"
-    # Pasta temporária para o download do Selenium
-    DOWNLOAD_FOLDER = BASE_DIR / "temp_downloads"
     # Garante que as pastas existam
     DESTINO_FOLDER.mkdir(exist_ok=True)
     DOWNLOAD_FOLDER.mkdir(exist_ok=True)
