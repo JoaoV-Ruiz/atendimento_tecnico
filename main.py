@@ -3,6 +3,39 @@ from styles import apply_styles
 from dotenv import load_dotenv
 import os
 
+# Configuração do Fuso
+fuso_br = pytz.timezone('America/Sao_Paulo')
+agora = datetime.now(fuso_br)
+
+# Defina o horário do gatilho
+HORA_ALVO = 16
+MINUTO_ALVO = 05
+ARQUIVO_TRAVA = "trava_diaria.txt"
+
+# LÓGICA DO GATILHO SILENCIOSO
+if agora.hour == HORA_ALVO and agora.minute == MINUTO_ALVO:
+    # Verifica se já rodou hoje usando um arquivo físico no servidor
+    ja_rodou = False
+    if os.path.exists(ARQUIVO_TRAVA):
+        with open(ARQUIVO_TRAVA, "r") as f:
+            data_gravada = f.read().strip()
+            if data_gravada == agora.strftime("%Y-%m-%d"):
+                ja_rodou = True
+
+    if not ja_rodou:
+        # Registra a trava ANTES para não duplicar se o Streamlit atualizar
+        with open(ARQUIVO_TRAVA, "w") as f:
+            f.write(agora.strftime("%Y-%m-%d"))
+            
+        # CHAMA O ROBÔ DO MÓDULO AMARELOS
+        with st.status("🤖 Iniciando Relatório Automático das 23:45..."):
+            sucesso = amarelos.realizar_coleta_e_envio_automatizado()
+            if sucesso:
+                st.success("Relatório enviado para o Cauê!")
+            else:
+                # Se falhou, remove a trava para tentar de novo no próximo minuto
+                os.remove(ARQUIVO_TRAVA)
+                
 # 1. Carregar configurações
 load_dotenv()
 st.set_page_config(page_title="Indicadores Atend. Ao Técnico", layout="wide", page_icon="🚀")
