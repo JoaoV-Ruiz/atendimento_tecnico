@@ -15,11 +15,9 @@ print(f"Hora do Servidor (Log): {datetime.now().strftime('%H:%M:%S')}")
 print(f"Hora de Brasília (Python): {agora.strftime('%H:%M:%S')}")
 print(f"---------------------")
 
-# Exiba no rodapé do site também para você ficar tranquilo
-st.sidebar.write(f"🕒 Hora Brasília: {agora.strftime('%H:%M:%S')}")
 # Defina o horário do gatilho
-HORA_ALVO = 16
-MINUTO_ALVO = 15
+HORA_ALVO = 17
+MINUTO_ALVO = 50
 ARQUIVO_TRAVA = "trava_diaria.txt"
 
 # LÓGICA DO GATILHO SILENCIOSO
