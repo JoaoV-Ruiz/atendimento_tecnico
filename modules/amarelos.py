@@ -108,17 +108,24 @@ def disparar_automacao():
 def render():
     st_autorefresh(interval=30000, key="auto_refresh_amarelos")
     
+    # --- Lógica de Cache ---
     fuso_br = pytz.timezone('America/Sao_Paulo')
     agora_atual = datetime.now(fuso_br)
-    
-    st.title("📊 Monitor de Provisionamento")
 
-    # --- LÓGICA DE CACHE ---
     if 'dados_cache' not in st.session_state:
         st.session_state['dados_cache'] = None
-    if 'ultima_coleta' not in st.session_state:
-        st.session_state['ultima_coleta'] = None
+    
+    # IMPORTANTE: Inicializar a última coleta já com fuso horário de Brasília
+    if 'ultima_coleta' not in st.session_state or st.session_state['ultima_coleta'] is None:
+        # Colocamos uma data bem antiga (mas com fuso) para forçar a primeira coleta
+        st.session_state['ultima_coleta'] = agora_atual - timedelta(days=1)
 
+    # Agora a conta (agora_atual - ultima_coleta) vai funcionar porque ambos são "aware" (tem fuso)
+    if st.session_state['dados_cache'] is None or (agora_atual - st.session_state['ultima_coleta'] >= timedelta(minutes=1)):
+        df, checados, tela = disparar_automacao()
+        if df is not None:
+            st.session_state['dados_cache'] = (df, checados, tela)
+            st.session_state['ultima_coleta'] = agora_atual
     # Dispara coleta se necessário
     if st.session_state['dados_cache'] is None or (agora_atual - st.session_state['ultima_coleta'] >= timedelta(minutes=1)):
         df, checados, tela = disparar_automacao()
