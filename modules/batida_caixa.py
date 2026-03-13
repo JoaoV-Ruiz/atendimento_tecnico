@@ -32,18 +32,18 @@ def render():
             st.session_state[f"c_batida_{indice}"] = st.session_state[key_temp]
             atualizar_portas()
 
-   def conectar_google_sheets():
-    try:
-        # Lê a string do JSON direto dos segredos do Streamlit
-        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
-        
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-        client = gspread.authorize(creds)
-        return client
-    except Exception as e:
-        st.error(f"Erro na conexão com Google Sheets: {e}")
-        return None
+    def conectar_google_sheets():
+        try:
+            # Lê a string do JSON direto dos segredos do Streamlit
+            creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
+            
+            scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+            client = gspread.authorize(creds)
+            return client
+        except Exception as e:
+            st.error(f"Erro na conexão com Google Sheets: {e}")
+            return None
 
     def limpar_campos():
         """ Limpa os dados permanentes, incrementa versão e deleta chaves temporárias """
