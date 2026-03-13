@@ -2,6 +2,7 @@ import streamlit as st
 from styles import apply_styles
 from dotenv import load_dotenv
 import os
+import pytz
 
 # Configuração do Fuso
 fuso_br = pytz.timezone('America/Sao_Paulo')
