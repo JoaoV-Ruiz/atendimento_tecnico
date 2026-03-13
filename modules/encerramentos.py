@@ -19,27 +19,31 @@ from streamlit_autorefresh import st_autorefresh
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
-from datetime import datetime
 import traceback
-import os
-from dotenv import load_dotenv
 from pathlib import Path
 
 def render():
-    
-    
     st_autorefresh(interval=5 * 60 * 1000, key="refresh_encerramentos")
     
-    # Em vez de ERP_USER = os.getenv("ERP_USER")
+    # --- CONFIGURAÇÃO DE SEGREDOS E CAMINHOS ---
     ERP_USER = st.secrets["ERP_USER"]
     ERP_PASS = st.secrets["ERP_PASS"]
-    DOWNLOAD_FOLDER = st.secrets["DOWNLOAD_PATH"]
-    DESTINO_FOLDER = st.secrets["DESTINO_PATH"]
-    # Define a pasta raiz do projeto
-    BASE_DIR = Path(__file__).parent
-    # Garante que as pastas existam
-    DESTINO_FOLDER.mkdir(exist_ok=True)
-    DOWNLOAD_FOLDER.mkdir(exist_ok=True)
+    
+    # Definimos a raiz do projeto de forma segura
+    BASE_DIR = Path(__file__).parent.parent
+
+    # Transformamos os nomes das pastas em objetos Path reais
+    # Usamos .strip("/") para evitar caminhos absolutos errados no Linux
+    NOME_DOWNLOAD = st.secrets["DOWNLOAD_PATH"].strip("/")
+    NOME_DESTINO = st.secrets["DESTINO_PATH"].strip("/")
+
+    DOWNLOAD_FOLDER = BASE_DIR / NOME_DOWNLOAD
+    DESTINO_FOLDER = BASE_DIR / NOME_DESTINO
+
+    # Agora o .mkdir() vai funcionar porque DOWNLOAD_FOLDER é um objeto Path
+    DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+    DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
+
     URL_ERP = "https://erp.osirnet.com.br/all_solicitations#/"
 
     def super_limpeza(texto):
@@ -68,6 +72,7 @@ def render():
                 "SINDEWCRIZELNUNES": "SINDEW CRIZEL NUNES", "CRISTIANOMARQUES": "CRISTIANO MARQUES",
                 "FILIPEVIEIRAVAZ": "FILIPE VIEIRA VAZ"
             }
+            # caminho_csv já vem como string ou Path, o pandas lida bem
             df = pd.read_csv(caminho_csv, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
             col_encontrada = [c for c in df.columns if "Encerramento" in c]
             if not col_encontrada: return None
@@ -86,16 +91,23 @@ def render():
 
     def mover_arquivo_recente():
         timeout = 60
+        # Listamos usando a string do caminho
+        path_str = str(DOWNLOAD_FOLDER.absolute())
         for _ in range(timeout):
-            if not any(f.endswith(".crdownload") for f in os.listdir(DOWNLOAD_FOLDER)): break
+            if not any(f.endswith(".crdownload") for f in os.listdir(path_str)): break
             time.sleep(1)
-        arquivos = glob.glob(os.path.join(DOWNLOAD_FOLDER, "*"))
+        
+        arquivos = glob.glob(os.path.join(path_str, "*"))
         if not arquivos: return None
+        
         arquivo_recente = max(arquivos, key=os.path.getmtime)
-        if not os.path.exists(DESTINO_FOLDER): os.makedirs(DESTINO_FOLDER)
-        caminho_final = os.path.join(DESTINO_FOLDER, os.path.basename(arquivo_recente))
-        shutil.move(arquivo_recente, caminho_final)
-        return caminho_final
+        
+        # Define caminho final
+        nome_arq = os.path.basename(arquivo_recente)
+        caminho_final = DESTINO_FOLDER / nome_arq
+        
+        shutil.move(arquivo_recente, str(caminho_final.absolute()))
+        return str(caminho_final.absolute())
 
     @st.cache_data(ttl=300, show_spinner=False)
     def disparar_automacao_cached():
@@ -111,7 +123,7 @@ def render():
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
 
-        # Importante: No Linux do Streamlit, o caminho do download deve ser absoluto
+        # No Linux, o diretório de download DEVE ser o caminho absoluto em string
         prefs = {
             "download.default_directory": str(DOWNLOAD_FOLDER.absolute()),
             "download.prompt_for_download": False,
@@ -141,8 +153,6 @@ def render():
             try:
                 c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
                 c_pass = driver.find_element(By.ID, ":r1:")
-                print(ERP_USER)
-                print(ERP_PASS)
                 forcar_input_react(c_user, ERP_USER)
                 forcar_input_react(c_pass, ERP_PASS) 
                 driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
@@ -206,7 +216,7 @@ def render():
                 time.sleep(10)
             except: pass
 
-            # 4. Exportação (A parte que faltava para não travar)
+            # 4. Exportação
             status_text.text("📥 Baixando arquivo CSV...")
             p_bar.progress(85)
             try:
@@ -215,7 +225,6 @@ def render():
                 time.sleep(2)
                 driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
                 
-                # Espera o download concluir
                 time.sleep(25)
                 caminho = mover_arquivo_recente()
                 
@@ -226,14 +235,13 @@ def render():
                 prog_container.empty()
                 text_container.empty()
                 
-                # RETORNO PARA O CACHE
                 return {"dados": analisar_dados_encerramentos(caminho), "horario": datetime.now().strftime("%H:%M:%S")}
             except: return None
                 
         finally:
             if driver: driver.quit()
 
-    # Interface Encerramentos
+    # Interface
     st.title("🚀 É A EQUIPE DO ENCERRAS!!!")
     resultado = disparar_automacao_cached()
     
@@ -255,7 +263,6 @@ def render():
 
             tab_geral, tab_ranking, tab_individual = st.tabs(["📊 Visão Geral", "🏆 Ranking Mensal", "👤 Individual"])
 
-            # --- TAB VISÃO GERAL ---
             with tab_geral:
                 df_mes = df_completo[df_completo['MES_ANO'] == mes_atual_str]
                 if not df_mes.empty:
@@ -273,7 +280,6 @@ def render():
                 else:
                     st.info(f"Sem dados para {mes_atual_str}.")
 
-            # --- TAB RANKING (Mensal + Geral) ---
             with tab_ranking:
                 if meses_disponiveis:
                     nomes_abas = meses_disponiveis[:3] + ["🏆 Ranking Geral (Acumulado)"]
@@ -295,13 +301,10 @@ def render():
                         df_geral.index = df_geral.index + 1
                         st.table(df_geral)
 
-            # --- TAB INDIVIDUAL (Com Correção de Duplicate ID) ---
             with tab_individual:
                 atendentes = sorted(df_completo['Atendente'].unique())
                 if atendentes:
-                    # Adicionado 'key' único para evitar o erro de DuplicateElementId
                     tecnico = st.selectbox("Selecione o Atendente:", atendentes, key="sb_individual_tecnico")
-                    
                     df_tec = df_completo[df_completo['Atendente'] == tecnico].copy()
                     df_tec['MES_INICIO'] = df_tec['DATA_REF'].dt.to_period('M').dt.to_timestamp()
                     hist = df_tec.groupby('MES_INICIO').size().reset_index(name='Encerras')
