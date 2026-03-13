@@ -9,7 +9,7 @@ agora = datetime.now(fuso_br)
 
 # Defina o horário do gatilho
 HORA_ALVO = 16
-MINUTO_ALVO = 05
+MINUTO_ALVO = 15
 ARQUIVO_TRAVA = "trava_diaria.txt"
 
 # LÓGICA DO GATILHO SILENCIOSO
