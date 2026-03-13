@@ -23,6 +23,23 @@ from datetime import datetime
 import traceback
 from dotenv import load_dotenv
 
+def realizar_coleta_e_envio_automatizado():
+    """ Função que o servidor chamará mesmo se ninguém estiver logado """
+    import pytz
+    fuso_br = pytz.timezone('America/Sao_Paulo')
+    agora = datetime.now(fuso_br)
+    
+    # 1. Executa a coleta (disparar_automacao)
+    df, checados, tela = disparar_automacao() # Certifique-se que esta função use st.secrets
+    
+    if df is not None:
+        # 2. Salva o Excel
+        salvar_fechamento_diario(df, tela, checados)
+        # 3. Envia para o Zulip/Chat
+        executar_fluxo_completo() 
+        return True
+    return False
+    
 def render():
     load_dotenv()
     st_autorefresh(interval=30000, key="refresh_amarelos")
