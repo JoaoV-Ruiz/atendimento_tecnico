@@ -163,8 +163,7 @@ def render():
                                 data_hora, 
                                 st.session_state.batida_proto, 
                                 st.session_state.batida_cx, 
-                                portas_str, 
-                                st.session_state.batida_tec
+                                portas_str,
                             ]
                             aba_planilha.append_row(linha, value_input_option='USER_ENTERED')
                             st.toast("Registrado com sucesso!", icon="✅")
