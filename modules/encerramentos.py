@@ -16,36 +16,35 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from streamlit_autorefresh import st_autorefresh
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import json
 import traceback
+import pytz
 from pathlib import Path
 
 def render():
     st_autorefresh(interval=5 * 60 * 1000, key="refresh_encerramentos")
     
-    # --- CONFIGURAÇÃO DE SEGREDOS E CAMINHOS ---
+    # --- 1. CONFIGURAÇÃO DE SEGREDOS E CAMINHOS (PATHLIB) ---
     ERP_USER = st.secrets["ERP_USER"]
     ERP_PASS = st.secrets["ERP_PASS"]
     
-    # Definimos a raiz do projeto de forma segura
+    # Define a raiz do projeto (sobe dois níveis de modules/encerramentos.py)
     BASE_DIR = Path(__file__).parent.parent
 
-    # Transformamos os nomes das pastas em objetos Path reais
-    # Usamos .strip("/") para evitar caminhos absolutos errados no Linux
+    # Pega os nomes das pastas dos Secrets e garante que são objetos Path
     NOME_DOWNLOAD = st.secrets["DOWNLOAD_PATH"].strip("/")
     NOME_DESTINO = st.secrets["DESTINO_PATH"].strip("/")
 
     DOWNLOAD_FOLDER = BASE_DIR / NOME_DOWNLOAD
     DESTINO_FOLDER = BASE_DIR / NOME_DESTINO
 
-    # Agora o .mkdir() vai funcionar porque DOWNLOAD_FOLDER é um objeto Path
+    # Cria as pastas no servidor
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
 
     URL_ERP = "https://erp.osirnet.com.br/all_solicitations#/"
 
+    # --- 2. FUNÇÕES DE APOIO ---
     def super_limpeza(texto):
         if not isinstance(texto, str): return ""
         texto = texto.split(" / ")[0].upper()
@@ -61,6 +60,8 @@ def render():
         return None
 
     def analisar_dados_encerramentos(caminho_csv):
+        if caminho_csv is None or not os.path.exists(caminho_csv):
+            return None
         try:
             termos_busca = {
                 "ALISSONDOCOUTOGUERREIRO": "ALISSON DO COUTO GUERREIRO", "IGORSALDANHA": "IGOR SALDANHA",
@@ -72,7 +73,6 @@ def render():
                 "SINDEWCRIZELNUNES": "SINDEW CRIZEL NUNES", "CRISTIANOMARQUES": "CRISTIANO MARQUES",
                 "FILIPEVIEIRAVAZ": "FILIPE VIEIRA VAZ"
             }
-            # caminho_csv já vem como string ou Path, o pandas lida bem
             df = pd.read_csv(caminho_csv, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
             col_encontrada = [c for c in df.columns if "Encerramento" in c]
             if not col_encontrada: return None
@@ -86,12 +86,11 @@ def render():
             df['Atendente'] = df[coluna_tecnico].apply(lambda x: identificar_pela_chave(x, termos_busca))
             return df.dropna(subset=['Atendente', 'DATA_REF']).copy()
         except Exception as e:
-            st.error(f"Erro na análise: {e}")
+            st.error(f"Erro na análise do CSV: {e}")
             return None
 
     def mover_arquivo_recente():
         timeout = 60
-        # Listamos usando a string do caminho
         path_str = str(DOWNLOAD_FOLDER.absolute())
         for _ in range(timeout):
             if not any(f.endswith(".crdownload") for f in os.listdir(path_str)): break
@@ -101,14 +100,13 @@ def render():
         if not arquivos: return None
         
         arquivo_recente = max(arquivos, key=os.path.getmtime)
-        
-        # Define caminho final
         nome_arq = os.path.basename(arquivo_recente)
         caminho_final = DESTINO_FOLDER / nome_arq
         
         shutil.move(arquivo_recente, str(caminho_final.absolute()))
         return str(caminho_final.absolute())
 
+    # --- 3. AUTOMAÇÃO SELENIUM ---
     @st.cache_data(ttl=300, show_spinner=False)
     def disparar_automacao_cached():
         prog_container = st.empty()
@@ -123,17 +121,25 @@ def render():
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
 
-        # No Linux, o diretório de download DEVE ser o caminho absoluto em string
+        abs_download_path = str(DOWNLOAD_FOLDER.absolute())
         prefs = {
-            "download.default_directory": str(DOWNLOAD_FOLDER.absolute()),
+            "download.default_directory": abs_download_path,
             "download.prompt_for_download": False,
-            "directory_upgrade": True
+            "directory_upgrade": True,
+            "safebrowsing.enabled": True
         }
         chrome_options.add_experimental_option("prefs", prefs)
 
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
+            
+            # Comando CRÍTICO para habilitar downloads no modo Headless do Linux
+            driver.execute_cdp_cmd("Page.setDownloadBehavior", {
+                "behavior": "allow",
+                "downloadPath": abs_download_path
+            })
+
             wait = WebDriverWait(driver, 35)
             
             def forcar_input_react(elemento, valor):
@@ -149,14 +155,14 @@ def render():
             status_text.text("🔐 Efetuando Login...")
             p_bar.progress(20)
             driver.get(URL_ERP)
-            time.sleep(4)
+            time.sleep(5)
             try:
                 c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
                 c_pass = driver.find_element(By.ID, ":r1:")
                 forcar_input_react(c_user, ERP_USER)
                 forcar_input_react(c_pass, ERP_PASS) 
                 driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
-                time.sleep(8)
+                time.sleep(10)
             except: pass
 
             # 2. Tela Antiga
@@ -169,15 +175,14 @@ def render():
             except: pass
 
             # 3. Filtros
-            status_text.text("🔍 Aplicando filtros avançados...")
+            status_text.text("🔍 Aplicando filtros...")
             p_bar.progress(60)
             try:
                 driver.get(URL_ERP)
-                time.sleep(4)
+                time.sleep(5)
                 wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
                 time.sleep(3)
 
-                # Equipe
                 driver.find_element(By.ID, "teamId").click()
                 time.sleep(1)
                 f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
@@ -188,36 +193,24 @@ def render():
                 time.sleep(1)
                 driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
 
-                # Limpeza Datas Abertura
-                status_text.text("🧹 Limpando filtros de abertura...")
+                # Limpeza datas
                 driver.execute_script("""
                     ['beginInitialDate', 'endInitialDate'].forEach(id => {
                         var el = document.getElementById(id);
-                        if(el) {
-                            el.focus(); el.value = '';
-                            el.dispatchEvent(new Event('input', {bubbles:true}));
-                            el.dispatchEvent(new Event('change', {bubbles:true}));
-                            el.blur();
-                        }
+                        if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
                     });
                 """)
-                time.sleep(1)
 
-                # Datas Encerramento
                 hj = datetime.now()
-                ini = hj.replace(day=1).strftime("%d/%m/%Y")
                 fim = hj.replace(day=calendar.monthrange(hj.year, hj.month)[1]).strftime("%d/%m/%Y")
-                status_text.text(f"📅 Definindo encerramentos: {ini} a {fim}")
-                
                 forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), fim)
                 time.sleep(2)
-
                 driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-                time.sleep(10)
+                time.sleep(12)
             except: pass
 
             # 4. Exportação
-            status_text.text("📥 Baixando arquivo CSV...")
+            status_text.text("📥 Baixando CSV...")
             p_bar.progress(85)
             try:
                 btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
@@ -225,41 +218,40 @@ def render():
                 time.sleep(2)
                 driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
                 
-                time.sleep(25)
+                time.sleep(30) # Tempo maior para o servidor processar
                 caminho = mover_arquivo_recente()
                 
+                if caminho is None:
+                    return None
+
                 status_text.text("✅ Sincronizado!")
                 p_bar.progress(100)
                 time.sleep(1)
-                
                 prog_container.empty()
                 text_container.empty()
                 
-                return {"dados": analisar_dados_encerramentos(caminho), "horario": datetime.now().strftime("%H:%M:%S")}
+                hora_br = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")
+                return {"dados": analisar_dados_encerramentos(caminho), "horario": hora_br}
             except: return None
                 
         finally:
             if driver: driver.quit()
 
-    # Interface
+    # --- 4. INTERFACE STREAMLIT ---
     st.title("🚀 É A EQUIPE DO ENCERRAS!!!")
     resultado = disparar_automacao_cached()
     
-    if resultado is not None and resultado.get("dados") is not None:
+    if resultado and resultado.get("dados") is not None:
         df_completo = resultado["dados"]
         hora = resultado["horario"]
         
         if not df_completo.empty:
             st.markdown(f"**🕒 Última Sincronização:** `{hora}`")
-            
-            hoje = datetime.now()
+            hoje = datetime.now(pytz.timezone('America/Sao_Paulo'))
             mes_atual_str = hoje.strftime('%m/%Y')
             
-            meses_disponiveis = sorted(
-                df_completo['MES_ANO'].dropna().unique(), 
-                key=lambda x: datetime.strptime(x, '%m/%Y'), 
-                reverse=True
-            )
+            meses_disponiveis = sorted(df_completo['MES_ANO'].dropna().unique(), 
+                                       key=lambda x: datetime.strptime(x, '%m/%Y'), reverse=True)
 
             tab_geral, tab_ranking, tab_individual = st.tabs(["📊 Visão Geral", "🏆 Ranking Mensal", "👤 Individual"])
 
@@ -269,36 +261,24 @@ def render():
                     stats = df_mes['Atendente'].value_counts().reset_index()
                     stats.columns = ['Atendente', 'Encerras']
                     stats.index = stats.index + 1 
-                    
                     c1, c2, c3 = st.columns(3)
                     c1.metric(f"Total em {mes_atual_str}", f"{len(df_mes)} un")
                     c2.metric("Média/Técnico", f"{round(stats['Encerras'].mean(), 1)}")
                     c3.metric("Líder", f"{stats.iloc[0]['Atendente'].split()[0]}", f"{stats.iloc[0]['Encerras']} un")
-                    
-                    st.markdown("### 📋 Tabela de Produtividade")
                     st.dataframe(stats, use_container_width=True)
-                else:
-                    st.info(f"Sem dados para {mes_atual_str}.")
+                else: st.info(f"Sem dados para {mes_atual_str}.")
 
             with tab_ranking:
                 if meses_disponiveis:
-                    nomes_abas = meses_disponiveis[:3] + ["🏆 Ranking Geral (Acumulado)"]
-                    abas_rank = st.tabs(nomes_abas)
-                    
+                    abas_rank = st.tabs(meses_disponiveis[:3] + ["🏆 Ranking Geral"])
                     for i, mes in enumerate(meses_disponiveis[:3]):
                         with abas_rank[i]:
                             df_r = df_completo[df_completo['MES_ANO'] == mes]['Atendente'].value_counts().reset_index()
-                            df_r.columns = ['Atendente', 'Total']
-                            df_r.index = df_r.index + 1
+                            df_r.columns = ['Atendente', 'Total']; df_r.index = df_r.index + 1
                             st.table(df_r)
-                    
                     with abas_rank[-1]:
-                        st.markdown("### 🌎 Desempenho Histórico da Equipe")
                         df_geral = df_completo['Atendente'].value_counts().reset_index()
-                        df_geral.columns = ['Atendente', 'Total Acumulado']
-                        total_vol = df_geral['Total Acumulado'].sum()
-                        df_geral['Participação'] = ((df_geral['Total Acumulado'] / total_vol) * 100).round(1).astype(str) + '%'
-                        df_geral.index = df_geral.index + 1
+                        df_geral.columns = ['Atendente', 'Total Acumulado']; df_geral.index = df_geral.index + 1
                         st.table(df_geral)
 
             with tab_individual:
@@ -308,22 +288,12 @@ def render():
                     df_tec = df_completo[df_completo['Atendente'] == tecnico].copy()
                     df_tec['MES_INICIO'] = df_tec['DATA_REF'].dt.to_period('M').dt.to_timestamp()
                     hist = df_tec.groupby('MES_INICIO').size().reset_index(name='Encerras')
-                    hist = hist.sort_values('MES_INICIO')
-
                     col1, col2 = st.columns([1, 2])
                     with col1:
                         st.metric("Total Acumulado", len(df_tec))
-                        st.write("**Histórico Mensal:**")
                         hist_tabela = hist.copy()
                         hist_tabela['Mês/Ano'] = hist_tabela['MES_INICIO'].dt.strftime('%m/%Y')
-                        tabela_final = hist_tabela.sort_values('MES_INICIO', ascending=False)
-                        st.dataframe(tabela_final[['Mês/Ano', 'Encerras']], hide_index=True, use_container_width=True)
-                    
-                    with col2:
-                        st.markdown(f"**Evolução de {tecnico}**")
-                        chart_data = hist.set_index('MES_INICIO')['Encerras']
-                        st.line_chart(chart_data)
-        else:
-            st.warning("⚠️ Nenhum dado encontrado.")
-    else:
-        st.info("⏳ Aguardando dados...")
+                        st.dataframe(hist_tabela.sort_values('MES_INICIO', ascending=False)[['Mês/Ano', 'Encerras']], hide_index=True)
+                    with col2: st.line_chart(hist.set_index('MES_INICIO')['Encerras'])
+        else: st.warning("⚠️ Nenhum dado encontrado no CSV.")
+    else: st.info("⏳ Aguardando sincronização do ERP (isso pode levar 1 minuto)...")
