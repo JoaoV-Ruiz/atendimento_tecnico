@@ -15,7 +15,7 @@ import json
 import pytz
 from pathlib import Path
 
-# --- CONFIGURAÇÕES FIXAS ---
+# --- CONFIGURAÇÕES FIXAS (Mantenha as suas) ---
 TABELA_NOMES = {
     "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
     "956": "ERICA MARLOW", "1153": "MARIA EDUARDA", "1163": "JULIA DUARTE",
@@ -25,8 +25,8 @@ TABELA_NOMES = {
 }
 
 URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
-URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
 
+# --- FUNÇÕES DE APOIO ---
 def conectar_google_sheets():
     try:
         creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
@@ -42,9 +42,7 @@ def conectar_google_sheets():
 def salvar_fechamento_google_sheets(df_atual, total_tela, total_checados):
     planilha = conectar_google_sheets()
     if not planilha: return
-    
     try:
-        # Tenta pegar a aba de histórico, se não existir, cria
         try:
             aba = planilha.worksheet("Historico_Amarelos")
         except:
@@ -63,7 +61,7 @@ def salvar_fechamento_google_sheets(df_atual, total_tela, total_checados):
     except Exception as e:
         st.error(f"Erro ao registrar no Sheets: {e}")
 
-@st.cache_data(ttl=60, show_spinner=False) # TTL reduzido para 1 min para ser mais dinâmico
+@st.cache_data(ttl=60, show_spinner=False)
 def disparar_automacao():
     chrome_options = Options()
     chrome_options.add_argument("--headless")
@@ -108,26 +106,25 @@ def disparar_automacao():
 def render():
     st_autorefresh(interval=30000, key="auto_refresh_amarelos")
     
-    # --- Lógica de Cache ---
+    # --- AJUSTE DE FUSO HORÁRIO (AWARE DATETIME) ---
     fuso_br = pytz.timezone('America/Sao_Paulo')
     agora_atual = datetime.now(fuso_br)
+    
+    st.title("📊 Monitor de Provisionamento")
 
+    # --- INICIALIZAÇÃO SEGURA DO CACHE NO SESSION STATE ---
     if 'dados_cache' not in st.session_state:
         st.session_state['dados_cache'] = None
     
-    # IMPORTANTE: Inicializar a última coleta já com fuso horário de Brasília
     if 'ultima_coleta' not in st.session_state or st.session_state['ultima_coleta'] is None:
-        # Colocamos uma data bem antiga (mas com fuso) para forçar a primeira coleta
+        # Inicializa com uma data passada, mas com fuso horário (AWARE)
         st.session_state['ultima_coleta'] = agora_atual - timedelta(days=1)
 
-    # Agora a conta (agora_atual - ultima_coleta) vai funcionar porque ambos são "aware" (tem fuso)
-    if st.session_state['dados_cache'] is None or (agora_atual - st.session_state['ultima_coleta'] >= timedelta(minutes=1)):
-        df, checados, tela = disparar_automacao()
-        if df is not None:
-            st.session_state['dados_cache'] = (df, checados, tela)
-            st.session_state['ultima_coleta'] = agora_atual
-    # Dispara coleta se necessário
-    if st.session_state['dados_cache'] is None or (agora_atual - st.session_state['ultima_coleta'] >= timedelta(minutes=1)):
+    # --- LÓGICA DE ATUALIZAÇÃO ---
+    # Agora a subtração funciona porque ambos são aware (mesmo mundo de fuso horário)
+    tempo_passado = agora_atual - st.session_state['ultima_coleta']
+    
+    if st.session_state['dados_cache'] is None or tempo_passado >= timedelta(minutes=1):
         df, checados, tela = disparar_automacao()
         if df is not None:
             st.session_state['dados_cache'] = (df, checados, tela)
@@ -137,7 +134,6 @@ def render():
     if st.session_state['dados_cache']:
         df_dados, total_checados, total_tela = st.session_state['dados_cache']
         
-        # EXIBIÇÃO DO HORÁRIO CORRETO NA TELA
         st.markdown(f"""
         <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px;">
             🕒 <b>Horário Brasília:</b> {agora_atual.strftime('%H:%M:%S')} | 
@@ -158,6 +154,5 @@ def render():
         with c2:
             st.bar_chart(df_dados.set_index("Colaborador"))
             
-        # BOTÃO DE FECHAMENTO MANUAL (Caso queira salvar antes das 23:45)
         if st.button("💾 SALVAR FECHAMENTO AGORA"):
             salvar_fechamento_google_sheets(df_dados, total_tela, total_checados)
