@@ -42,6 +42,12 @@ load_dotenv()
 st.set_page_config(page_title="Indicadores Atend. Ao Técnico", layout="wide", page_icon="🚀")
 apply_styles()
 
+# Tente carregar o fuso, se der erro, use o padrão
+try:
+    fuso_br = pytz.timezone('America/Sao_Paulo')
+    agora = datetime.now(fuso_br)
+except Exception:
+    agora = datetime.now()
 # 2. INICIALIZAÇÃO DO CACHE PERMANENTE
 # Criamos as chaves originais aqui para que elas persistam entre as abas
 if 'batida_version' not in st.session_state:
