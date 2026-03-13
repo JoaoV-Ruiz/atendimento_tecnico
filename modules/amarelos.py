@@ -22,6 +22,8 @@ import json
 from datetime import datetime
 import traceback
 from dotenv import load_dotenv
+import pytz
+from datetime import datetime
 
 def realizar_coleta_e_envio_automatizado():
     """ Função que o servidor chamará mesmo se ninguém estiver logado """
@@ -222,7 +224,11 @@ def render():
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
+        # Crie uma variável para o fuso de Brasília
+        fuso_br = pytz.timezone('America/Sao_Paulo')
         
+        # Quando for registrar a hora da coleta:
+        st.session_state['ultima_coleta'] = datetime.now(fuso_br)
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
