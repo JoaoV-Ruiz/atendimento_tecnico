@@ -6,19 +6,6 @@ import json
 from datetime import datetime
 import pytz # Certifique-se de que 'pytz' esteja no seu requirements.txt
 
-# EXIBIÇÃO DO HORÁRIO COM CORES ADAPTÁVEIS
-st.markdown(f"""
-            <div style="
-                padding: 10px; 
-                border-radius: 5px; 
-                border: 1px solid rgba(49, 51, 63, 0.2); 
-                margin-bottom: 20px;
-                text-align: center;
-            ">
-                🕒 <span style="font-weight: bold;">Horário Brasília:</span> {agora_atual.strftime('%H:%M:%S')} | 
-                📥 <span style="font-weight: bold;">Última Coleta:</span> {st.session_state['ultima_coleta'].strftime('%H:%M:%S')}
-            </div>
-""", unsafe_allow_html=True)
 
 def render():
     # Puxa a versão atual do cache para garantir que os widgets resetem visualmente
