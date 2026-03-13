@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "caixas-batidas",
+  "private_key_id": "50940222853360f016c9085f00ebd31c575f9766",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC90BN2LEbc6Utx\n92GLiD31Pjo7Ubfrl+AbLGmw0lXYal1631bNPxc/RUqnkV0n3yNSupVTCS2tr1lR\nrY8Oyagg8BphlNtDn0mrN0+e3SDBELNp+8K5EI8Wb7UioPQVqvBGMSg7Hi7OEUeV\nkkUqQOC4B1LgQVTvIL8yPimROid6bPFCrsqmDT0C1n9pK8jDFAKo1E08krAoiMjA\nTDyvxsx01obCEjCHYhA8Oa/Z5SZi86XJEmL27i20ortm3TLE7fWuMVXGRQlmTaoB\njrb6qxL1ZnV+xctF0vNI0V8K5s8FYEcrdTXwFtUzIEzfvSu2Qqm088f5LIUUQspY\nBfkPhr6bAgMBAAECggEAB0OLOx5+p72V0YqyBPD1zgjPma2K6E0rml6cvNOPzXRk\nl2ssmzYq4ZT5QmhhtEDpzSSuyjqzsM3hESsfKmW1NW161PkpWvEhlJfNSDsWIc1N\n0GR+Ey77CtTDjcuzC5E7GLSQ4ZJKIECxCJxMYU2SS/ibx1E4ut358yZF2PTsxdaM\ne3AObFT/YUZVUAX5dIvC9hXKopbZ5JC/wuF8K0lXFyuetIcvfZd33I9DOZgxSKL9\nGbtlEjiZPlU9RB2pzwls64JAdD4hhRwvvwIGaUj3Nx2WZDd2QhP86Z2qMAkiHAVM\nwmCNdOITOoJ4TOdRxOrXXsoT0lG/eVE3S/2fa4TDwQKBgQD2Nwdxokw+8VJ2N5Y/\niPVhA0jrFfLOvMfGKgNoLmg+A+YbtjqqRM4THnOsq4mA+M99XENjhPMIWB6DiJDg\n2jfLzcQDrn80MDXblYeaDVHeblGqdi75s+PQ2VMecbmmxigOjqbZCd9mECfW/FXF\naInS5qgMBeIl7zeYawsrbyQVKQKBgQDFWzdJDTQpHZb2K/DXxTk4hth6M4nIkxa3\n6DlpdCZgqQHIh8UmO1XHoIRMlh+909yHe91pBz76MPvjnx82FNgObPbrW0kfmSJV\npjujU3xEcVwXM0VQzOhL6vFpQQ3ob3VisyDa6ljnHX1G/51uCXmGNKE1lNCEZRNM\nV3NPWOpKIwKBgGqC7b5zxmYoQVMQwvejSPt5z06bhRl4Qzfvrt+fy8qgJyhv0bsc\n3sUYlFPrNSXM/P2vLxvbRMOkUzb1mi8bV63byuMI1tB91p6ydiHnhzYhJUUHsVSm\nRHRxv2pZKkYCTQvXHEih47mkXYe8S2KF0bGhxKrG1MkyTiuqiv90KfjZAoGBAK0q\nfDf8/eeVrwARTiIFS0/uAcQ3tI3pgeWcPcPpxkLKCGaLutDw/zNKBMuubeuCGd5H\nMN8XHIsqr9nppNkvMOR3d7DLSD4Rf67nTSzh9AeZ79PriMZ9BNaYL3rLOgjYw4b2\n5b0wIxGnLmU9pEUIyziWtVzuVofUqDo0AVl+CxVBAoGAVDnza2XRsbQ/ckGzh06B\nFEVSMbFUeYX0XQKEhYyIuO6QTe+yFF7YWpVLeEACer9bTtAqmflCqwCUoBOxQHos\n20nug6CvqxhRzZG/PZUFfpSXEjGx1f226gI8r0/xDkHPznboS6xoeeAKKHCN4EPQ\nV1mKFAhUB7vFHSZTLWHA3Pc=\n-----END PRIVATE KEY-----\n",
+  "client_email": "registrador-de-caixas@caixas-batidas.iam.gserviceaccount.com",
+  "client_id": "108793562165310867078",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/registrador-de-caixas%40caixas-batidas.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
