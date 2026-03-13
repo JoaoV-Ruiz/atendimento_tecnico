@@ -143,8 +143,7 @@ def render():
         df_dados, total_checados, total_tela = st.session_state['dados_cache']
         
         # Chama o box de horários do styles.py
-        render_timer_box(
-            agora_atual.strftime('%H:%M:%S'), 
+        render_timer_box( 
             st.session_state['ultima_coleta'].strftime('%H:%M:%S')
         )
 
