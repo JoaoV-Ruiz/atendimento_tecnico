@@ -153,7 +153,11 @@ def render():
                     with st.spinner('Salvando dados...'):
                         aba_planilha = conectar_google_sheets()
                         if aba_planilha:
-                            data_hora = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            # --- CORREÇÃO DO FUSO HORÁRIO AQUI ---
+                            fuso_br = pytz.timezone('America/Sao_Paulo')
+                            data_hora = datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M")
+                            # -------------------------------------
+                            
                             linha = [
                                 data_hora, 
                                 st.session_state.batida_proto, 
@@ -161,9 +165,6 @@ def render():
                                 portas_str, 
                                 st.session_state.batida_tec
                             ]
-                            # Agora chamamos append_row diretamente no objeto da aba
                             aba_planilha.append_row(linha, value_input_option='USER_ENTERED')
                             st.toast("Registrado com sucesso!", icon="✅")
                             st.balloons()
-                except Exception as e:
-                    st.error(f"Erro ao salvar na planilha: {e}")
