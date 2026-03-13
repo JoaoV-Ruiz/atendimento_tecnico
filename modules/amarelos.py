@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import time
 import json
 import pytz
-from styles import apply_styles, render_timer_box
+from styles import apply_styles
 
 # --- CONFIGURAÇÕES FIXAS ---
 TABELA_NOMES = {
@@ -25,7 +25,6 @@ TABELA_NOMES = {
 
 URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
 
-# --- FUNÇÕES DE APOIO ---
 def conectar_google_sheets():
     try:
         creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
@@ -73,7 +72,6 @@ def disparar_automacao():
         wait = WebDriverWait(driver, 30)
         driver.get(URL_COLETA)
 
-        # Login usando Secrets
         wait.until(EC.element_to_be_clickable((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
         driver.find_element(By.NAME, "entrar").click()
@@ -98,54 +96,44 @@ def disparar_automacao():
         
         return df_interface, total_checados, total_tela
     except Exception as e:
-        st.error(f"Erro na coleta automática: {e}")
+        st.error(f"Erro na coleta: {e}")
         return None, 0, 0
     finally:
         if driver: driver.quit()
 
 def render():
-    # Aplica CSS e Footer
     apply_styles()
-    
-    # Auto-refresh a cada 30 segundos
     st_autorefresh(interval=30000, key="auto_refresh_amarelos")
     
-    # 1. Configuração de Fuso Horário (AWARE)
     fuso_br = pytz.timezone('America/Sao_Paulo')
     agora_atual = datetime.now(fuso_br)
     
     st.title("📊 Monitor de Provisionamento")
 
-    # 2. Inicialização segura do Session State
     if 'dados_cache' not in st.session_state:
         st.session_state['dados_cache'] = None
     
     if 'ultima_coleta' not in st.session_state or st.session_state['ultima_coleta'] is None:
         st.session_state['ultima_coleta'] = agora_atual - timedelta(days=1)
 
-    # 3. Proteção contra erro de fuso horário (TypeError)
     try:
         tempo_passado = agora_atual - st.session_state['ultima_coleta']
     except TypeError:
         st.session_state['ultima_coleta'] = agora_atual - timedelta(days=1)
         tempo_passado = agora_atual - st.session_state['ultima_coleta']
 
-    # 4. Lógica de Disparo do Robô (TTL de 1 minuto)
     if st.session_state['dados_cache'] is None or tempo_passado >= timedelta(minutes=1):
-        with st.spinner("Sincronizando com o sistema..."):
+        with st.spinner("Sincronizando..."):
             df, checados, tela = disparar_automacao()
             if df is not None:
                 st.session_state['dados_cache'] = (df, checados, tela)
                 st.session_state['ultima_coleta'] = agora_atual
 
-    # --- INTERFACE ---
     if st.session_state['dados_cache']:
         df_dados, total_checados, total_tela = st.session_state['dados_cache']
         
-        # Chama o box de horários do styles.py
-        render_timer_box( 
-            st.session_state['ultima_coleta'].strftime('%H:%M:%S')
-        )
+        # MOSTRA APENAS A ÚLTIMA COLETA EM UM FORMATO DISCRETO
+        st.caption(f"📥 Última atualização dos dados: {st.session_state['ultima_coleta'].strftime('%H:%M:%S')}")
 
         m1, m2, m3 = st.columns(3)
         m1.metric("Fila Total", total_tela)
@@ -155,14 +143,9 @@ def render():
         st.divider()
         c1, c2 = st.columns([1, 1.5])
         with c1:
-            st.markdown("### 🏆 Produtividade")
             st.dataframe(df_dados, use_container_width=True, hide_index=True)
         with c2:
-            st.markdown("### 📈 Gráfico")
             st.bar_chart(df_dados.set_index("Colaborador"))
             
-        # Botão para salvar no Google Sheets manualmente
         if st.button("💾 REGISTRAR FECHAMENTO NO GOOGLE SHEETS", use_container_width=True, type="primary"):
             salvar_fechamento_google_sheets(df_dados, total_tela, total_checados)
-    else:
-        st.info("Aguardando primeira coleta de dados...")
