@@ -10,12 +10,11 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 import time
-import os
 import json
 import pytz
-from pathlib import Path
+from styles import apply_styles, render_timer_box
 
-# --- CONFIGURAÇÕES FIXAS (Mantenha as suas) ---
+# --- CONFIGURAÇÕES FIXAS ---
 TABELA_NOMES = {
     "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
     "956": "ERICA MARLOW", "1153": "MARIA EDUARDA", "1163": "JULIA DUARTE",
@@ -57,7 +56,7 @@ def salvar_fechamento_google_sheets(df_atual, total_tela, total_checados):
             novas_linhas.append([agora_br, row["Colaborador"], row["Qtd"], total_tela, total_checados])
         
         aba.append_rows(novas_linhas)
-        st.toast("✅ Fechamento salvo no Google Sheets!", icon="💾")
+        st.toast("✅ Fechamento registrado no Google Sheets!", icon="💾")
     except Exception as e:
         st.error(f"Erro ao registrar no Sheets: {e}")
 
@@ -74,6 +73,7 @@ def disparar_automacao():
         wait = WebDriverWait(driver, 30)
         driver.get(URL_COLETA)
 
+        # Login usando Secrets
         wait.until(EC.element_to_be_clickable((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
         driver.find_element(By.NAME, "entrar").click()
@@ -98,50 +98,56 @@ def disparar_automacao():
         
         return df_interface, total_checados, total_tela
     except Exception as e:
-        st.error(f"Erro na coleta: {e}")
+        st.error(f"Erro na coleta automática: {e}")
         return None, 0, 0
     finally:
         if driver: driver.quit()
 
 def render():
+    # Aplica CSS e Footer
+    apply_styles()
+    
+    # Auto-refresh a cada 30 segundos
     st_autorefresh(interval=30000, key="auto_refresh_amarelos")
     
-    # --- AJUSTE DE FUSO HORÁRIO (AWARE DATETIME) ---
+    # 1. Configuração de Fuso Horário (AWARE)
     fuso_br = pytz.timezone('America/Sao_Paulo')
     agora_atual = datetime.now(fuso_br)
     
     st.title("📊 Monitor de Provisionamento")
 
-    # --- INICIALIZAÇÃO SEGURA DO CACHE NO SESSION STATE ---
+    # 2. Inicialização segura do Session State
     if 'dados_cache' not in st.session_state:
         st.session_state['dados_cache'] = None
     
     if 'ultima_coleta' not in st.session_state or st.session_state['ultima_coleta'] is None:
-        # Inicializa com uma data passada, mas com fuso horário (AWARE)
         st.session_state['ultima_coleta'] = agora_atual - timedelta(days=1)
 
-    # --- LÓGICA DE ATUALIZAÇÃO ---
-    # Agora a subtração funciona porque ambos são aware (mesmo mundo de fuso horário)
-    tempo_passado = agora_atual - st.session_state['ultima_coleta']
-    
+    # 3. Proteção contra erro de fuso horário (TypeError)
+    try:
+        tempo_passado = agora_atual - st.session_state['ultima_coleta']
+    except TypeError:
+        st.session_state['ultima_coleta'] = agora_atual - timedelta(days=1)
+        tempo_passado = agora_atual - st.session_state['ultima_coleta']
+
+    # 4. Lógica de Disparo do Robô (TTL de 1 minuto)
     if st.session_state['dados_cache'] is None or tempo_passado >= timedelta(minutes=1):
-        df, checados, tela = disparar_automacao()
-        if df is not None:
-            st.session_state['dados_cache'] = (df, checados, tela)
-            st.session_state['ultima_coleta'] = agora_atual
+        with st.spinner("Sincronizando com o sistema..."):
+            df, checados, tela = disparar_automacao()
+            if df is not None:
+                st.session_state['dados_cache'] = (df, checados, tela)
+                st.session_state['ultima_coleta'] = agora_atual
 
     # --- INTERFACE ---
     if st.session_state['dados_cache']:
         df_dados, total_checados, total_tela = st.session_state['dados_cache']
         
-        st.markdown(f"""
-        <div style="background-color: #f0f2f6; padding: 10px; border-radius: 5px;">
-            🕒 <b>Horário Brasília:</b> {agora_atual.strftime('%H:%M:%S')} | 
-            📥 <b>Última Coleta:</b> {st.session_state['ultima_coleta'].strftime('%H:%M:%S')}
-        </div>
-        """, unsafe_allow_html=True)
+        # Chama o box de horários do styles.py
+        render_timer_box(
+            agora_atual.strftime('%H:%M:%S'), 
+            st.session_state['ultima_coleta'].strftime('%H:%M:%S')
+        )
 
-        st.write("")
         m1, m2, m3 = st.columns(3)
         m1.metric("Fila Total", total_tela)
         m2.metric("Checados", total_checados)
@@ -150,9 +156,14 @@ def render():
         st.divider()
         c1, c2 = st.columns([1, 1.5])
         with c1:
+            st.markdown("### 🏆 Produtividade")
             st.dataframe(df_dados, use_container_width=True, hide_index=True)
         with c2:
+            st.markdown("### 📈 Gráfico")
             st.bar_chart(df_dados.set_index("Colaborador"))
             
-        if st.button("💾 SALVAR FECHAMENTO AGORA"):
+        # Botão para salvar no Google Sheets manualmente
+        if st.button("💾 REGISTRAR FECHAMENTO NO GOOGLE SHEETS", use_container_width=True, type="primary"):
             salvar_fechamento_google_sheets(df_dados, total_tela, total_checados)
+    else:
+        st.info("Aguardando primeira coleta de dados...")
