@@ -44,7 +44,7 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # 4. GATILHO AUTOMÁTICO (23:45)
-if agora.hour == 18 and agora.minute == 38:
+if agora.hour == 18 and agora.minute == 47:
     if st.session_state.dia_ultimo_disparo != agora.day:
         sucesso = amarelos.realizar_coleta_e_envio_automatizado()
         if sucesso:
