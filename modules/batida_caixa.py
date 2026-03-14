@@ -1,167 +1,111 @@
 import streamlit as st
-import pandas as pd
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, timedelta
-import time
 import json
+from datetime import datetime
 import pytz
 
-# --- CONFIGURAÇÕES ---
-URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
-URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
-
-TABELA_NOMES = {
-    "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
-    "956": "ERICA MARLOW", "1153": "MARIA EDUARDA", "1163": "JULIA DUARTE",
-    "1177": "KAUÃ GOCKS", "1318": "FILIPE VAZ", "1267": "ALISSON GUERREIRO",
-    "931": "JOÃO VITOR RUIZ", "960": "RICHER ARAUJO", "667": "CRISTIANO MARQUES", 
-    "441": "CAIO ALVES DOS REIS", "968": "SINDEW CRIZEL", "322" : "IGOR SALDANHA"
-}
-
-def conectar_google_sheets():
-    try:
-        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-        client = gspread.authorize(creds)
-        return client.open_by_url(st.secrets["SPREADSHEET_URL"])
-    except: return None
-
-def salvar_fechamento_google_sheets(df_atual, total_sucesso, total_falha):
-    planilha = conectar_google_sheets()
-    if not planilha: return
-    try:
-        nome_aba = f"FECHAMENTO_{datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d-%m-%Y')}"
-        try: aba = planilha.worksheet(nome_aba)
-        except:
-            aba = planilha.add_worksheet(title=nome_aba, rows="100", cols="10")
-            aba.append_row(["Colaborador", "Qtd", "Data", "Sucesso", "Falha"])
-        
-        data_str = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%d/%m/%Y %H:%M")
-        linhas = [[r["Colaborador"], r["Qtd"], data_str, total_sucesso, total_falha] for _, r in df_atual.iterrows()]
-        aba.append_rows(linhas)
-    except: pass
-
-@st.cache_data(ttl=60, show_spinner=False)
-def disparar_automacao():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Chrome(options=options)
-    try:
-        driver.get(URL_COLETA)
-        wait = WebDriverWait(driver, 30)
-        wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
-        driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
-        driver.find_element(By.NAME, "entrar").click()
-        
-        wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
-        time.sleep(5) 
-        
-        links_sucesso = driver.find_elements(By.XPATH, "//a[@data-checado]")
-        total_sucesso = len(links_sucesso)
-        
-        linhas_falha = driver.find_elements(By.CSS_SELECTOR, "tbody.busca-falha tr")
-        total_falha = len(linhas_falha)
-        
-        contagem = {nome: 0 for nome in TABELA_NOMES.values()}
-        total_checados = 0
-        for link in links_sucesso:
-            val = link.get_attribute("data-checado")
-            if val in TABELA_NOMES:
-                contagem[TABELA_NOMES[val]] += 1
-                total_checados += 1
-        
-        df = pd.DataFrame(list(contagem.items()), columns=["Colaborador", "Qtd"])
-        df_final = df[df["Qtd"] > 0].sort_values(by="Qtd", ascending=False)
-        
-        return df_final, total_checados, total_sucesso, total_falha
-    except Exception as e:
-        return None, 0, 0, 0
-    finally:
-        driver.quit()
-
-def enviar_relatorio_chat(total_sucesso, total_falha):
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Chrome(options=options)
-    try:
-        driver.get(URL_CHAT)
-        wait = WebDriverWait(driver, 40)
-        wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(st.secrets["EMAIL_CORP"])
-        driver.find_element(By.NAME, "password").send_keys(st.secrets["SENHA_ZULIP"])
-        driver.find_element(By.NAME, "button").click()
-        
-        time.sleep(7)
-        xpath = "//*[contains(text(), 'Cauê Arócha')]"
-        contato = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
-        driver.execute_script("arguments[0].click();", contato)
-        time.sleep(3)
-
-        agora = datetime.now(pytz.timezone('America/Sao_Paulo'))
-        mensagem = (
-            f"📊 *Relatório Automático de Provisionamento*\n"
-            f"🕒 Horário: {agora.strftime('%H:%M:%S')}\n"
-            f"----------------------------------\n"
-            f"✅ *Total Sucesso:* {total_sucesso}\n"
-            f"❌ *Total Falha:* {total_falha}\n"
-            f"📈 *Total Geral:* {total_sucesso + total_falha}\n"
-            f"----------------------------------"
-        )
-
-        textarea = wait.until(EC.presence_of_element_located((By.ID, "compose-textarea")))
-        driver.execute_script("arguments[0].value = arguments[1];", textarea, mensagem)
-        driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
-        time.sleep(2)
-        
-        btn_enviar = driver.find_element(By.ID, "compose-send-button")
-        driver.execute_script("arguments[0].click();", btn_enviar)
-        return True
-    except: return False
-    finally: driver.quit()
-
-def realizar_coleta_e_envio_automatizado():
-    df, checados, sucesso, falha = disparar_automacao()
-    if df is not None:
-        salvar_fechamento_google_sheets(df, sucesso, falha)
-        return enviar_relatorio_chat(sucesso, falha)
-    return False
-
 def render():
-    st_autorefresh(interval=30000, key="refresh_amarelos")
-    fuso = pytz.timezone('America/Sao_Paulo')
-    agora = datetime.now(fuso)
-    st.title("📊 Monitor de Provisionamento")
-    
-    # Previne erro de comparação com None
-    if st.session_state.ultima_coleta is None:
-        st.session_state.ultima_coleta = agora - timedelta(days=1)
+    # Puxa a versão do session_state (já inicializado no main.py)
+    v = st.session_state.batida_version
 
-    if st.session_state.dados_cache is None or (agora - st.session_state.ultima_coleta >= timedelta(minutes=5)):
-        df, checados, sucesso, falha = disparar_automacao()
-        st.session_state.dados_cache = (df, checados, sucesso, falha)
-        st.session_state.ultima_coleta = agora
+    # --- FUNÇÕES DE SUPORTE ---
+    def salvar_campo(chave_permanente):
+        key_temp = f"temp_{chave_permanente}_{v}"
+        if key_temp in st.session_state:
+            st.session_state[chave_permanente] = st.session_state[key_temp]
 
-    if st.session_state.dados_cache:
-        df_d, t_c, t_s, t_f = st.session_state.dados_cache
-        st.caption(f"📥 Última atualização: {st.session_state.ultima_coleta.strftime('%H:%M:%S')}")
+    def atualizar_portas():
+        st.session_state.portas = [f"{i+1:02d}" for i in range(16) if st.session_state.get(f"c_batida_{i}")]
+
+    def salvar_checkbox(indice):
+        key_temp = f"temp_c_batida_{indice}_{v}"
+        if key_temp in st.session_state:
+            st.session_state[f"c_batida_{indice}"] = st.session_state[key_temp]
+            atualizar_portas()
+
+    def conectar_google_sheets():
+        try:
+            creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
+            scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+            client = gspread.authorize(creds)
+            planilha = client.open_by_url(st.secrets["SPREADSHEET_URL"])
+            return planilha.get_worksheet(0)
+        except Exception as e:
+            st.error(f"Erro Google Sheets: {e}")
+            return None
+
+    def limpar_campos():
+        st.session_state.batida_proto = ""
+        st.session_state.batida_tec = ""
+        st.session_state.batida_cx = ""
+        st.session_state.anot_batida = ""
+        for i in range(16):
+            st.session_state[f"e_b_{i}"] = ""
+            st.session_state[f"s_b_{i}"] = ""
+            st.session_state[f"id_b_{i}"] = ""
+            st.session_state[f"c_batida_{i}"] = False
+        st.session_state.portas = []
+        st.session_state.batida_version += 1
+        st.rerun()
+
+    st.title("💰 BATIDA DE CAIXA")
+
+    # --- CABEÇALHO ---
+    c1, c2, c3, c_btn = st.columns([2, 2, 1, 0.5])
+    with c1: 
+        st.text_input("PROTOCOLO", value=st.session_state.batida_proto, 
+                      key=f"temp_batida_proto_{v}", on_change=salvar_campo, args=("batida_proto",))
+    with c2: 
+        st.text_input("TÉCNICO", value=st.session_state.batida_tec, 
+                      key=f"temp_batida_tec_{v}", on_change=salvar_campo, args=("batida_tec",))
+    with c3: 
+        st.text_input("CAIXA", value=st.session_state.batida_cx, 
+                      key=f"temp_batida_cx_{v}", on_change=salvar_campo, args=("batida_cx",))
+    with c_btn: 
+        st.write(" ") 
+        if st.button("🗑️"): limpar_campos()
+
+    portas_str = ", ".join(st.session_state.portas) if st.session_state.portas else "Nenhuma"
+    st.info(f"**Portas Liberadas:** {portas_str}")
+
+    col_tabela, col_lateral = st.columns([3, 1.3])
+
+    # --- TABELA DE ENTRADA ---
+    with col_tabela:
+        pesos = [0.2, 1, 1, 1, 0.3]
+        h = st.columns(pesos)
+        h[0].write("**#**"); h[1].write("**ETIQUETA**"); h[2].write("**SERIAL**"); h[3].write("**ID**"); h[4].write("**L**")
+
+        for i in range(16):
+            r = st.columns(pesos)
+            r[0].write(f"{i+1:02d}")
+            # Campos de texto
+            for idx, pref in enumerate(['e_b_', 's_b_', 'id_b_'], start=1):
+                chave = f"{pref}{i}"
+                r[idx].text_input(f"in_{chave}", value=st.session_state[chave], 
+                                  key=f"temp_{chave}_{v}", on_change=salvar_campo, 
+                                  args=(chave,), label_visibility="collapsed")
+            # Checkbox
+            r[4].checkbox(f"cb_{i}", value=st.session_state[f"c_batida_{i}"], 
+                          key=f"temp_c_batida_{i}_{v}", on_change=salvar_checkbox, 
+                          args=(i,), label_visibility="collapsed")
+
+    # --- RELATÓRIO E ENVIO ---
+    with col_lateral:
+        st.write("**ANOTAÇÕES**")
+        st.text_area("Notas", value=st.session_state.anot_batida, height=100, 
+                     key=f"temp_anot_batida_{v}", on_change=salvar_campo, args=("anot_batida",), label_visibility="collapsed")
         
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Fila Sucesso", t_s)
-        m2.metric("Checados", t_c)
-        m3.metric("Não Checados", t_s - t_c)
-        
-        st.divider()
-        c1, c2 = st.columns([1, 1.5])
-        c1.dataframe(df_d, use_container_width=True, hide_index=True)
-        c2.bar_chart(df_d.set_index("Colaborador"))
+        res = f"Protocolo: {st.session_state.batida_proto}\nCaixa: {st.session_state.batida_cx}\nPortas: {portas_str}\n"
+        st.text_area("Relatório Final", res, height=250)
+
+        if st.button("💾 REGISTRAR PLANILHA", use_container_width=True, type="primary"):
+            aba = conectar_google_sheets()
+            if aba:
+                fuso = pytz.timezone('America/Sao_Paulo')
+                data = datetime.now(fuso).strftime("%d/%m/%Y %H:%M")
+                aba.append_row([data, st.session_state.batida_proto, st.session_state.batida_cx, portas_str])
+                st.success("Registrado!")
