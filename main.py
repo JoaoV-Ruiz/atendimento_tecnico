@@ -16,8 +16,8 @@ print(f"Hora de Brasília (Python): {agora.strftime('%H:%M:%S')}")
 print(f"---------------------")
 
 # Defina o horário do gatilho
-HORA_ALVO = 17
-MINUTO_ALVO = 50
+HORA_ALVO = 18
+MINUTO_ALVO = 18
 ARQUIVO_TRAVA = "trava_diaria.txt"
 
 # LÓGICA DO GATILHO SILENCIOSO
