@@ -10,7 +10,17 @@ from datetime import datetime, timedelta
 import time
 import pytz
 
-# ... (TABELA_NOMES e URLs permanecem iguais)
+# --- CONFIGURAÇÕES ---
+URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
+URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
+
+TABELA_NOMES = {
+    "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
+    "956": "ERICA MARLOW", "1153": "MARIA EDUARDA", "1163": "JULIA DUARTE",
+    "1177": "KAUÃ GOCKS", "1318": "FILIPE VAZ", "1267": "ALISSON GUERREIRO",
+    "931": "JOÃO VITOR RUIZ", "960": "RICHER ARAUJO", "667": "CRISTIANO MARQUES", 
+    "441": "CAIO ALVES DOS REIS", "968": "SINDEW CRIZEL", "322" : "IGOR SALDANHA"
+}
 
 @st.cache_data(ttl=60, show_spinner=False)
 def disparar_automacao():
@@ -20,7 +30,7 @@ def disparar_automacao():
     options.add_argument("--disable-dev-shm-usage")
     driver = webdriver.Chrome(options=options)
     try:
-        driver.get("https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php")
+        driver.get(URL_COLETA)
         wait = WebDriverWait(driver, 30)
         wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
@@ -48,7 +58,7 @@ def disparar_automacao():
         
         return df_final, total_checados, total_sucesso, total_falha
     except:
-        return None, 0, 0, 0
+        return pd.DataFrame(columns=["Colaborador", "Qtd"]), 0, 0, 0
     finally:
         driver.quit()
 
@@ -59,7 +69,7 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
     options.add_argument("--disable-dev-shm-usage")
     driver = webdriver.Chrome(options=options)
     try:
-        driver.get("https://chat.osirnet.com.br/accounts/login/")
+        driver.get(URL_CHAT)
         wait = WebDriverWait(driver, 40)
         wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.NAME, "password").send_keys(st.secrets["SENHA_ZULIP"])
@@ -86,7 +96,8 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
         driver.execute_script("arguments[0].value = arguments[1];", textarea, mensagem)
         driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
         time.sleep(2)
-        driver.execute_script("arguments[0].click();", driver.find_element(By.ID, "compose-send-button"))
+        btn_enviar = driver.find_element(By.ID, "compose-send-button")
+        driver.execute_script("arguments[0].click();", btn_enviar)
         return True
     except: return False
     finally: driver.quit()
@@ -118,6 +129,12 @@ def render():
         m3.metric("Faltam Checar", t_s - t_c)
         
         st.divider()
-        c1, c2 = st.columns([1, 1.5])
-        c1.dataframe(df_d, hide_index=True)
-        c2.bar_chart(df_d.set_index("Colaborador"))
+        
+        if not df_d.empty:
+            c1, c2 = st.columns([1, 1.5])
+            with c1:
+                st.dataframe(df_d, hide_index=True)
+            with c2:
+                st.bar_chart(df_d.set_index("Colaborador"))
+        else:
+            st.info("Nenhum dado de produtividade encontrado para os colaboradores listados.")
