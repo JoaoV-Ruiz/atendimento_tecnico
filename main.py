@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from modules import amarelos, batida_caixa, encerramentos, portabilidade
 from styles import apply_styles
 
-# 1. Configuração da Página
+# 1. Configuração da Página (Sempre a primeira linha de Streamlit)
 st.set_page_config(page_title="Sistema Atendimento Técnico", layout="wide", page_icon="📊")
 
 # 2. Inicialização de Segurança (Boot)
@@ -36,15 +36,15 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # 3. Gatilho Automático (23:45)
-if agora.hour == 19 and agora.minute == 55:
+if agora.hour == 23 and agora.minute == 45:
     if st.session_state.dia_disparo != agora.day:
-        st.session_state.dia_disparo = agora.day # Trava imediata contra duplicidade
+        st.session_state.dia_disparo = agora.day
         with st.status("🤖 Enviando relatório diário..."):
             sucesso = amarelos.realizar_coleta_e_envio_automatizado()
             if sucesso:
                 st.toast("Relatório enviado com sucesso!", icon="🚀")
             else:
-                st.session_state.dia_disparo = 0 # Reset se falhar
+                st.session_state.dia_disparo = 0
                 st.error("Erro no envio do relatório.")
 
 # 4. Menu Lateral e Navegação
