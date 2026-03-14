@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 import time
 import json
 import pytz
+from styles import apply_styles
 
 # --- CONFIGURAÇÕES ---
 TABELA_NOMES = {
@@ -25,6 +26,7 @@ TABELA_NOMES = {
 URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
 URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
 
+# --- FUNÇÕES DE APOIO ---
 def conectar_google_sheets():
     try:
         creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
@@ -40,16 +42,17 @@ def salvar_fechamento_google_sheets(df_atual, total_tela, total_checados):
     planilha = conectar_google_sheets()
     if not planilha: return
     try:
+        nome_aba = f"FECHAMENTO_{datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d-%m-%Y')}"
         try:
-            aba = planilha.worksheet("Historico_Amarelos")
+            aba = planilha.worksheet(nome_aba)
         except:
-            aba = planilha.add_worksheet(title="Historico_Amarelos", rows="1000", cols="10")
-            aba.append_row(["Data/Hora", "Colaborador", "Qtd", "Total Tela", "Total Checados"])
+            aba = planilha.add_worksheet(title=nome_aba, rows="100", cols="10")
+            aba.append_row(["Colaborador", "Qtd", "Data/Hora", "Total Tela", "Total Checados"])
         
         agora_br = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%d/%m/%Y %H:%M:%S")
-        linhas = [[agora_br, r["Colaborador"], r["Qtd"], total_tela, total_checados] for _, r in df_atual.iterrows()]
+        linhas = [[r["Colaborador"], r["Qtd"], agora_br, total_tela, total_checados] for _, r in df_atual.iterrows()]
         aba.append_rows(linhas)
-        st.toast("✅ Dados salvos no Sheets!")
+        st.toast("✅ Dados salvos no Google Sheets!")
     except Exception as e:
         st.error(f"Erro ao salvar: {e}")
 
@@ -62,12 +65,13 @@ def disparar_automacao():
     driver = webdriver.Chrome(options=options)
     try:
         driver.get(URL_COLETA)
-        wait = WebDriverWait(driver, 20)
+        wait = WebDriverWait(driver, 30)
         wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
         driver.find_element(By.NAME, "entrar").click()
+        
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
-        time.sleep(2)
+        time.sleep(3)
         links = driver.find_elements(By.XPATH, "//a[@data-checado]")
         total_tela = len(links)
         contagem = {nome: 0 for nome in TABELA_NOMES.values()}
@@ -82,32 +86,78 @@ def disparar_automacao():
     finally:
         driver.quit()
 
+def enviar_relatorio_chat(df_dados, total_tela, total_checados):
+    """ Faz o login no Chat e envia o relatório para o Cauê """
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    driver = webdriver.Chrome(options=options)
+    try:
+        driver.get(URL_CHAT)
+        wait = WebDriverWait(driver, 30)
+        
+        # Login
+        wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(st.secrets["EMAIL_CORP"])
+        driver.find_element(By.NAME, "password").send_keys(st.secrets["SENHA_ZULIP"])
+        driver.find_element(By.NAME, "button").click()
+        
+        # Selecionar Cauê (Xpath do seu código antigo que funciona)
+        xpath_caue = "//span[contains(@class, 'conversation-partners-list') and contains(text(), 'Cauê Arócha')]"
+        contato = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_caue)))
+        driver.execute_script("arguments[0].click();", contato)
+        time.sleep(2)
+
+        # Montar Mensagem
+        agora = datetime.now(pytz.timezone('America/Sao_Paulo'))
+        msg = (
+            f"📊 *Relatório Automático de Provisionamento*\n"
+            f"🕒 Horário: {agora.strftime('%H:%M:%S')}\n"
+            f"----------------------------------\n"
+            f"✅ *Total Sucesso (Checados):* {total_checados}\n"
+            f"❌ *Total Pendente:* {total_tela - total_checados}\n"
+            f"📈 *Total Fila:* {total_tela}\n"
+            f"----------------------------------"
+        )
+
+        # Enviar via JavaScript (Mais estável em servidor)
+        textarea = wait.until(EC.presence_of_element_located((By.ID, "compose-textarea")))
+        driver.execute_script("arguments[0].value = arguments[1];", textarea, msg)
+        driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
+        time.sleep(1)
+        
+        botao_enviar = driver.find_element(By.ID, "compose-send-button")
+        driver.execute_script("arguments[0].click();", botao_enviar)
+        return True
+    except Exception as e:
+        print(f"Erro no envio: {e}")
+        return False
+    finally:
+        driver.quit()
+
 def realizar_coleta_e_envio_automatizado():
-    """ Função disparada pela MAIN às 23:45 """
+    """ Função chamada pela MAIN às 23:45 """
     df, checados, tela = disparar_automacao()
     if df is not None:
         salvar_fechamento_google_sheets(df, tela, checados)
-        # Lógica de envio para o Chat aqui (Zulip/Cauê)
-        return True
+        sucesso = enviar_relatorio_chat(df, tela, checados)
+        return sucesso
     return False
 
 def render():
+    apply_styles()
     st_autorefresh(interval=30000, key="refresh_amarelos")
     fuso = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso)
     
     st.title("📊 Monitor de Provisionamento")
     
+    # Inicialização de cache e controle de data
     if 'dados_cache' not in st.session_state: st.session_state['dados_cache'] = None
     if 'ultima_coleta' not in st.session_state: st.session_state['ultima_coleta'] = agora - timedelta(days=1)
 
-    try:
-        diff = agora - st.session_state['ultima_coleta']
-    except:
-        st.session_state['ultima_coleta'] = agora - timedelta(days=1)
-        diff = agora - st.session_state['ultima_coleta']
-
-    if st.session_state['dados_cache'] is None or diff >= timedelta(minutes=1):
+    # Coleta de dados (Real-time)
+    if st.session_state['dados_cache'] is None or (agora - st.session_state['ultima_coleta'] >= timedelta(minutes=5)):
         df, checados, tela = disparar_automacao()
         st.session_state['dados_cache'] = (df, checados, tela)
         st.session_state['ultima_coleta'] = agora
