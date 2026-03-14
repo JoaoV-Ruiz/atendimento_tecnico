@@ -32,7 +32,7 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # 3. GATILHO 23:45
-if agora.hour == 23 and agora.minute == 45:
+if agora.hour == 19 and agora.minute == 33:
     if st.session_state.dia_disparo != agora.day:
         st.session_state.dia_disparo = agora.day
         with st.status("🤖 Processando Fechamento..."):
