@@ -55,7 +55,6 @@ def render():
         st.session_state.portas = []
         st.session_state.batida_version += 1
         
-        # Limpa as chaves temporárias para não pesar o estado
         for key in list(st.session_state.keys()):
             if key.startswith('temp_'):
                 del st.session_state[key]
@@ -111,7 +110,6 @@ def render():
         st.text_area("Notas", value=st.session_state.anot_batida, height=100, 
                      key=f"temp_anot_batida_{v}", on_change=salvar_campo, args=("anot_batida",), label_visibility="collapsed")
         
-        # Geração dinâmica do relatório para garantir atualização em tempo real
         res = (f"Protocolo: {st.session_state.batida_proto}\n"
                f"Técnico: {st.session_state.batida_tec}\n"
                f"Caixa: {st.session_state.batida_cx}\n"
@@ -120,15 +118,12 @@ def render():
                f"{'-'*20}\n")
         
         for i in range(16):
-            et = st.session_state[f"e_b_{i}"]
-            se = st.session_state[f"s_b_{i}"]
-            idx = st.session_state[f"id_b_{i}"]
+            et, se, idx = st.session_state[f"e_b_{i}"], st.session_state[f"s_b_{i}"], st.session_state[f"id_b_{i}"]
             if et or se or idx:
                 res += f"{i+1:02d} - {et} | {se} | {idx}\n"
         
         st.text_area("Relatório Final", res, height=250, label_visibility="collapsed")
         
-        # Botão Copiar (JavaScript)
         js_copy = json.dumps(res)
         components.html(f"""
             <button id="cp" style="width:100%; height:40px; background:#4da3ff; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-family:sans-serif;">📋 COPIAR RELATÓRIO</button>
@@ -142,7 +137,7 @@ def render():
             </script>
         """, height=50)
 
-        # Registro no Google Sheets
+        # --- REGISTRO SIMPLIFICADO NO GOOGLE SHEETS ---
         if st.button("💾 REGISTRAR NA PLANILHA", use_container_width=True, type="primary"):
             if not st.session_state.batida_proto or not st.session_state.batida_cx:
                 st.error("Protocolo e Caixa são obrigatórios!")
@@ -154,17 +149,16 @@ def render():
                             fuso_br = pytz.timezone('America/Sao_Paulo')
                             data_hora = datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M")
                             
+                            # Dados solicitados: Protocolo, Caixa e Portas Liberadas
                             linha = [
                                 str(data_hora), 
-                                str(st.session_state.batida_proto),
-                                str(st.session_state.batida_tec),
+                                str(st.session_state.batida_proto), 
                                 str(st.session_state.batida_cx), 
-                                str(portas_str), 
-                                str(st.session_state.anot_batida)
+                                str(portas_str)
                             ]
                             
                             aba.append_row(linha, value_input_option='USER_ENTERED')
-                            st.toast(f"Registrado com sucesso às {data_hora}!", icon="✅")
+                            st.toast(f"Registrado com sucesso!", icon="✅")
                             st.balloons()
                 except Exception as e:
-                    st.error(f"Erro ao salvar na planilha: {e}")
+                    st.error(f"Erro ao salvar: {e}")
