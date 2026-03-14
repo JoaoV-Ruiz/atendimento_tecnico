@@ -6,8 +6,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from streamlit_autorefresh import st_autorefresh
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 import time
+import json
 import pytz
 
 # --- CONFIGURAÇÕES ---
@@ -21,6 +24,31 @@ TABELA_NOMES = {
     "931": "JOÃO VITOR RUIZ", "960": "RICHER ARAUJO", "667": "CRISTIANO MARQUES", 
     "441": "CAIO ALVES DOS REIS", "968": "SINDEW CRIZEL", "322" : "IGOR SALDANHA"
 }
+
+def conectar_google_sheets():
+    try:
+        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+        client = gspread.authorize(creds)
+        return client.open_by_url(st.secrets["SPREADSHEET_URL"])
+    except: return None
+
+def salvar_fechamento_google_sheets(df_atual, total_sucesso, total_falha):
+    planilha = conectar_google_sheets()
+    if not planilha: return
+    try:
+        nome_aba = f"FECHAMENTO_{datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d-%m-%Y')}"
+        try: aba = planilha.worksheet(nome_aba)
+        except:
+            aba = planilha.add_worksheet(title=nome_aba, rows="100", cols="10")
+            aba.append_row(["Colaborador", "Qtd", "Data", "Sucesso", "Falha"])
+        
+        data_str = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%d/%m/%Y %H:%M")
+        linhas = [[r["Colaborador"], r["Qtd"], data_str, total_sucesso, total_falha] for _, r in df_atual.iterrows()]
+        aba.append_rows(linhas)
+        return True
+    except: return False
 
 @st.cache_data(ttl=60, show_spinner=False)
 def disparar_automacao():
@@ -39,11 +67,8 @@ def disparar_automacao():
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
         time.sleep(5) 
         
-        # Coleta Sucessos
         links_sucesso = driver.find_elements(By.XPATH, "//a[@data-checado]")
         total_sucesso = len(links_sucesso)
-        
-        # Coleta Falhas (TRs da busca-falha)
         linhas_falha = driver.find_elements(By.CSS_SELECTOR, "tbody.busca-falha tr")
         total_falha = len(linhas_falha)
         
@@ -57,10 +82,9 @@ def disparar_automacao():
         
         df = pd.DataFrame(list(contagem.items()), columns=["Colaborador", "Qtd"])
         df_final = df[df["Qtd"] > 0].sort_values(by="Qtd", ascending=False)
-        
         return df_final, total_checados, total_sucesso, total_falha
     except:
-        return pd.DataFrame(columns=["Colaborador", "Qtd"]), 0, 0, 0
+        return None, 0, 0, 0
     finally:
         driver.quit()
 
@@ -72,14 +96,19 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
     driver = webdriver.Chrome(options=options)
     try:
         driver.get(URL_CHAT)
-        wait = WebDriverWait(driver, 40)
+        wait = WebDriverWait(driver, 45)
+        
+        # Login
         wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.NAME, "password").send_keys(st.secrets["SENHA_ZULIP"])
         driver.find_element(By.NAME, "button").click()
         
-        time.sleep(7)
-        xpath = "//*[contains(text(), 'Cauê Arócha')]"
-        contato = wait.until(EC.element_to_be_clickable((By.XPATH, xpath)))
+        # Espera o carregamento e tenta remover qualquer overlay/modal
+        time.sleep(10) 
+        
+        # Clica no Cauê (Usando o XPath que funcionou na imagem que você mandou)
+        xpath_caue = "//span[contains(text(), 'Cauê Arócha')]"
+        contato = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_caue)))
         driver.execute_script("arguments[0].click();", contato)
         time.sleep(3)
 
@@ -98,17 +127,23 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
         driver.execute_script("arguments[0].value = arguments[1];", textarea, mensagem)
         driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
         time.sleep(2)
+        
         btn_enviar = driver.find_element(By.ID, "compose-send-button")
         driver.execute_script("arguments[0].click();", btn_enviar)
         return True
-    except:
+    except Exception as e:
+        print(f"Erro no Chat: {e}")
         return False
     finally:
         driver.quit()
 
 def realizar_coleta_e_envio_automatizado():
+    # 1. Coleta
     df, checados, sucesso, falha = disparar_automacao()
     if df is not None:
+        # 2. Salva no Sheets PRIMEIRO
+        salvar_fechamento_google_sheets(df, sucesso, falha)
+        # 3. Tenta enviar no Chat
         return enviar_relatorio_chat(sucesso, falha)
     return False
 
@@ -118,7 +153,6 @@ def render():
     agora = datetime.now(fuso)
     st.title("📊 Monitor de Provisionamento")
     
-    # Atualização de cache a cada 5 min
     if st.session_state.dados_cache is None or (agora - st.session_state.ultima_coleta >= timedelta(minutes=5)):
         df, checados, sucesso, falha = disparar_automacao()
         st.session_state.dados_cache = (df, checados, sucesso, falha)
@@ -127,20 +161,12 @@ def render():
     if st.session_state.dados_cache:
         df_d, t_c, t_s, t_f = st.session_state.dados_cache
         st.caption(f"📥 Última atualização: {st.session_state.ultima_coleta.strftime('%H:%M:%S')}")
-        
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Sucesso", t_s)
         m2.metric("Total Checado", t_c)
         m3.metric("Faltam Checar", t_s - t_c)
-        
         st.divider()
-        
-        # Proteção contra NoneType ou DataFrame vazio
         if df_d is not None and not df_d.empty:
             c1, c2 = st.columns([1, 1.5])
-            with c1:
-                st.dataframe(df_d, hide_index=True)
-            with c2:
-                st.bar_chart(df_d.set_index("Colaborador"))
-        else:
-            st.info("Aguardando carregamento de dados...")
+            with c1: st.dataframe(df_d, hide_index=True)
+            with c2: st.bar_chart(df_d.set_index("Colaborador"))
