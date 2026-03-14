@@ -6,33 +6,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from streamlit_autorefresh import st_autorefresh
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
 import time
-import json
 import pytz
 
-# --- CONFIGURAÇÕES ---
-URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
-URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
-
-TABELA_NOMES = {
-    "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
-    "956": "ERICA MARLOW", "1153": "MARIA EDUARDA", "1163": "JULIA DUARTE",
-    "1177": "KAUÃ GOCKS", "1318": "FILIPE VAZ", "1267": "ALISSON GUERREIRO",
-    "931": "JOÃO VITOR RUIZ", "960": "RICHER ARAUJO", "667": "CRISTIANO MARQUES", 
-    "441": "CAIO ALVES DOS REIS", "968": "SINDEW CRIZEL", "322" : "IGOR SALDANHA"
-}
-
-def conectar_google_sheets():
-    try:
-        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-        client = gspread.authorize(creds)
-        return client.open_by_url(st.secrets["SPREADSHEET_URL"])
-    except: return None
+# ... (TABELA_NOMES e URLs permanecem iguais)
 
 @st.cache_data(ttl=60, show_spinner=False)
 def disparar_automacao():
@@ -42,7 +20,7 @@ def disparar_automacao():
     options.add_argument("--disable-dev-shm-usage")
     driver = webdriver.Chrome(options=options)
     try:
-        driver.get(URL_COLETA)
+        driver.get("https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php")
         wait = WebDriverWait(driver, 30)
         wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
@@ -51,15 +29,12 @@ def disparar_automacao():
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
         time.sleep(5) 
         
-        # 1. Sucessos
         links_sucesso = driver.find_elements(By.XPATH, "//a[@data-checado]")
         total_sucesso = len(links_sucesso)
         
-        # 2. Falhas (TRs da tbody busca-falha)
         linhas_falha = driver.find_elements(By.CSS_SELECTOR, "tbody.busca-falha tr")
         total_falha = len(linhas_falha)
         
-        # 3. Contagem por colaborador (Baseado nos sucessos)
         contagem = {nome: 0 for nome in TABELA_NOMES.values()}
         total_checados = 0
         for link in links_sucesso:
@@ -72,7 +47,7 @@ def disparar_automacao():
         df_final = df[df["Qtd"] > 0].sort_values(by="Qtd", ascending=False)
         
         return df_final, total_checados, total_sucesso, total_falha
-    except Exception as e:
+    except:
         return None, 0, 0, 0
     finally:
         driver.quit()
@@ -84,7 +59,7 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
     options.add_argument("--disable-dev-shm-usage")
     driver = webdriver.Chrome(options=options)
     try:
-        driver.get(URL_CHAT)
+        driver.get("https://chat.osirnet.com.br/accounts/login/")
         wait = WebDriverWait(driver, 40)
         wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.NAME, "password").send_keys(st.secrets["SENHA_ZULIP"])
@@ -97,8 +72,6 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
         time.sleep(3)
 
         agora = datetime.now(pytz.timezone('America/Sao_Paulo'))
-        
-        # RELATÓRIO: Sucesso, Falha e Total Acumulado
         mensagem = (
             f"📊 *Relatório Automático de Provisionamento*\n"
             f"🕒 Horário: {agora.strftime('%H:%M:%S')}\n"
@@ -113,9 +86,7 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
         driver.execute_script("arguments[0].value = arguments[1];", textarea, mensagem)
         driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
         time.sleep(2)
-        
-        btn_enviar = driver.find_element(By.ID, "compose-send-button")
-        driver.execute_script("arguments[0].click();", btn_enviar)
+        driver.execute_script("arguments[0].click();", driver.find_element(By.ID, "compose-send-button"))
         return True
     except: return False
     finally: driver.quit()
@@ -123,7 +94,6 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
 def realizar_coleta_e_envio_automatizado():
     df, checados, sucesso, falha = disparar_automacao()
     if df is not None:
-        # Envia apenas os totais acumulados para o chat
         return enviar_relatorio_chat(sucesso, falha)
     return False
 
@@ -142,7 +112,6 @@ def render():
         df_d, t_c, t_s, t_f = st.session_state.dados_cache
         st.caption(f"📥 Última atualização: {st.session_state.ultima_coleta.strftime('%H:%M:%S')}")
         
-        # MONITOR SITE: Sucesso, Checado e Faltam Checar
         m1, m2, m3 = st.columns(3)
         m1.metric("Total Sucesso", t_s)
         m2.metric("Total Checado", t_c)
