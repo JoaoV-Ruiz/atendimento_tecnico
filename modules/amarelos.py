@@ -35,7 +35,7 @@ def conectar_google_sheets():
         return client.open_by_url(st.secrets["SPREADSHEET_URL"])
     except: return None
 
-def salvar_fechamento_google_sheets(df_atual, total_tela, total_checados):
+def salvar_fechamento_google_sheets(df_atual, total_sucesso, total_falha):
     planilha = conectar_google_sheets()
     if not planilha: return
     try:
@@ -43,10 +43,10 @@ def salvar_fechamento_google_sheets(df_atual, total_tela, total_checados):
         try: aba = planilha.worksheet(nome_aba)
         except:
             aba = planilha.add_worksheet(title=nome_aba, rows="100", cols="10")
-            aba.append_row(["Colaborador", "Qtd", "Data", "Total", "Checados"])
+            aba.append_row(["Colaborador", "Qtd", "Data", "Sucesso", "Falha"])
         
         data_str = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%d/%m/%Y %H:%M")
-        linhas = [[r["Colaborador"], r["Qtd"], data_str, total_tela, total_checados] for _, r in df_atual.iterrows()]
+        linhas = [[r["Colaborador"], r["Qtd"], data_str, total_sucesso, total_falha] for _, r in df_atual.iterrows()]
         aba.append_rows(linhas)
     except: pass
 
@@ -64,21 +64,21 @@ def disparar_automacao():
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
         driver.find_element(By.NAME, "entrar").click()
         
-        # Espera carregar as tabelas
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
-        time.sleep(5) # Tempo para o JS renderizar tudo
+        time.sleep(5) 
         
-        # Coleta os links de checagem (Sucesso)
-        links = driver.find_elements(By.XPATH, "//a[@data-checado]")
-        total_tela = len(links)
+        # 1. Sucessos
+        links_sucesso = driver.find_elements(By.XPATH, "//a[@data-checado]")
+        total_sucesso = len(links_sucesso)
         
-        # Coleta as TRs de falha (O que você pediu)
-        tr_falhas = driver.find_elements(By.CSS_SELECTOR, "tbody.busca-falha tr")
-        total_tr_falha = len(tr_falhas)
+        # 2. Falhas
+        linhas_falha = driver.find_elements(By.CSS_SELECTOR, "tbody.busca-falha tr")
+        total_falha = len(linhas_falha)
         
+        # 3. Contagem por colaborador (Baseado nos sucessos)
         contagem = {nome: 0 for nome in TABELA_NOMES.values()}
         total_checados = 0
-        for link in links:
+        for link in links_sucesso:
             val = link.get_attribute("data-checado")
             if val in TABELA_NOMES:
                 contagem[TABELA_NOMES[val]] += 1
@@ -87,15 +87,14 @@ def disparar_automacao():
         df = pd.DataFrame(list(contagem.items()), columns=["Colaborador", "Qtd"])
         df_final = df[df["Qtd"] > 0].sort_values(by="Qtd", ascending=False)
         
-        # Retornamos também o total de falhas
-        return df_final, total_checados, total_tela, total_tr_falha
+        return df_final, total_checados, total_sucesso, total_falha
     except Exception as e:
         print(f"Erro coleta: {e}")
         return None, 0, 0, 0
     finally:
         driver.quit()
 
-def enviar_relatorio_chat(df_dados, total_tela, total_checados, total_falhas):
+def enviar_relatorio_chat(total_sucesso, total_falha):
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -114,13 +113,15 @@ def enviar_relatorio_chat(df_dados, total_tela, total_checados, total_falhas):
         time.sleep(3)
 
         agora = datetime.now(pytz.timezone('America/Sao_Paulo'))
+        
+        # MENSAGEM CONFORME SOLICITADO: Sucesso, Falha e Total
         mensagem = (
             f"📊 *Relatório Automático de Provisionamento*\n"
             f"🕒 Horário: {agora.strftime('%H:%M:%S')}\n"
             f"----------------------------------\n"
-            f"✅ *Checados:* {total_checados}\n"
-            f"❌ *TR (Falhas):* {total_falhas}\n"
-            f"📈 *Total Fila:* {total_tela + total_falhas}\n"
+            f"✅ *Total Sucesso:* {total_sucesso}\n"
+            f"❌ *Total Falha:* {total_falha}\n"
+            f"📈 *Total Geral:* {total_sucesso + total_falha}\n"
             f"----------------------------------"
         )
 
@@ -132,17 +133,15 @@ def enviar_relatorio_chat(df_dados, total_tela, total_checados, total_falhas):
         btn_enviar = wait.until(EC.element_to_be_clickable((By.ID, "compose-send-button")))
         driver.execute_script("arguments[0].click();", btn_enviar)
         return True
-    except Exception as e:
-        print(f"Erro Chat: {e}")
-        return False
+    except: return False
     finally: driver.quit()
 
 def realizar_coleta_e_envio_automatizado():
-    # Coleta dados novos para o envio
-    df, checados, tela, falhas = disparar_automacao()
+    df, checados, sucesso, falha = disparar_automacao()
     if df is not None:
-        salvar_fechamento_google_sheets(df, tela, checados)
-        return enviar_relatorio_chat(df, tela, checados, falhas)
+        salvar_fechamento_google_sheets(df, sucesso, falha)
+        # Envia apenas os totais para o relatório
+        return enviar_relatorio_chat(sucesso, falha)
     return False
 
 def render():
@@ -156,17 +155,20 @@ def render():
     if 'ultima_coleta' not in st.session_state: st.session_state['ultima_coleta'] = agora - timedelta(days=1)
 
     if st.session_state['dados_cache'] is None or (agora - st.session_state['ultima_coleta'] >= timedelta(minutes=5)):
-        df, checados, tela, falhas = disparar_automacao()
-        st.session_state['dados_cache'] = (df, checados, tela, falhas)
+        df, checados, sucesso, falha = disparar_automacao()
+        st.session_state['dados_cache'] = (df, checados, sucesso, falha)
         st.session_state['ultima_coleta'] = agora
 
     if st.session_state['dados_cache']:
-        df_d, t_c, t_t, t_f = st.session_state['dados_cache']
+        df_d, t_c, t_s, t_f = st.session_state['dados_cache']
         st.caption(f"📥 Última atualização: {st.session_state['ultima_coleta'].strftime('%H:%M:%S')}")
+        
+        # MONITOR (Site): Mostra os pendentes de checagem
         m1, m2, m3 = st.columns(3)
-        m1.metric("Fila Sucesso", t_t)
+        m1.metric("Fila Sucesso", t_s)
         m2.metric("Checados", t_c)
-        m3.metric("TR (Falhas)", t_f)
+        m3.metric("Não Checados", t_s - t_c)
+        
         st.divider()
         c1, c2 = st.columns([1, 1.5])
         c1.dataframe(df_d, use_container_width=True, hide_index=True)
