@@ -44,11 +44,19 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # 4. GATILHO AUTOMÁTICO (23:45)
-if agora.hour == 18 and agora.minute == 47:
-    if st.session_state.dia_ultimo_disparo != agora.day:
-        sucesso = amarelos.realizar_coleta_e_envio_automatizado()
-        if sucesso:
-            st.session_state.dia_ultimo_disparo = agora.day
+if agora.hour == 18 and agora.minute == 55: # Use o seu horário de teste
+    if "dia_ultimo_disparo" not in st.session_state or st.session_state["dia_ultimo_disparo"] != agora.day:
+        # Marcamos como disparado ANTES para evitar que o autorefresh de 30s pegue o mesmo minuto
+        st.session_state["dia_ultimo_disparo"] = agora.day 
+        
+        with st.status("🤖 Processando envio único..."):
+            sucesso = amarelos.realizar_coleta_e_envio_automatizado()
+            if sucesso:
+                st.success("Relatório enviado!")
+            else:
+                # Se falhou, resetamos a trava para tentar no próximo refresh (opcional)
+                st.session_state["dia_ultimo_disparo"] = 0 
+                st.error("Falha no envio. Verifique os logs.")
 
 # 5. MENU LATERAL
 st.sidebar.title("🚀 Menu Principal")
