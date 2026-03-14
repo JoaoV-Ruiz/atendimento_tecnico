@@ -44,7 +44,7 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # 4. GATILHO AUTOMÁTICO (23:45)
-if agora.hour == 18 and agora.minute == 55: # Use o seu horário de teste
+if agora.hour == 19 and agora.minute == 12: # Use o seu horário de teste
     if "dia_ultimo_disparo" not in st.session_state or st.session_state["dia_ultimo_disparo"] != agora.day:
         # Marcamos como disparado ANTES para evitar que o autorefresh de 30s pegue o mesmo minuto
         st.session_state["dia_ultimo_disparo"] = agora.day 
