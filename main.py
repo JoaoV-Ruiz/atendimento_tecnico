@@ -11,7 +11,7 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # --- GATILHO AUTOMÁTICO (PROTEÇÃO CONTRA DUPLICIDADE) ---
-if agora.hour == 19 and agora.minute == 19:
+if agora.hour == 19 and agora.minute == 27:
     if "dia_disparo" not in st.session_state or st.session_state["dia_disparo"] != agora.day:
         # Marcamos o dia IMEDIATAMENTE para bloquear outros refreshes
         st.session_state["dia_disparo"] = agora.day
