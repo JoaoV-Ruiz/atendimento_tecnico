@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
@@ -7,7 +6,7 @@ from datetime import datetime
 import pytz
 
 def render():
-    # Puxa a versão do session_state (já inicializado no main.py)
+    # Puxa a versão para resetar widgets quando necessário
     v = st.session_state.batida_version
 
     # --- FUNÇÕES DE SUPORTE ---
@@ -16,14 +15,14 @@ def render():
         if key_temp in st.session_state:
             st.session_state[chave_permanente] = st.session_state[key_temp]
 
-    def atualizar_portas():
-        st.session_state.portas = [f"{i+1:02d}" for i in range(16) if st.session_state.get(f"c_batida_{i}")]
-
-    def salvar_checkbox(indice):
+    def atualizar_portas(indice):
+        # Salva o estado do checkbox primeiro
         key_temp = f"temp_c_batida_{indice}_{v}"
         if key_temp in st.session_state:
             st.session_state[f"c_batida_{indice}"] = st.session_state[key_temp]
-            atualizar_portas()
+        
+        # Atualiza a lista de portas selecionadas
+        st.session_state.portas = [f"{i+1:02d}" for i in range(16) if st.session_state.get(f"c_batida_{i}")]
 
     def conectar_google_sheets():
         try:
@@ -38,6 +37,7 @@ def render():
             return None
 
     def limpar_campos():
+        # Reset total das chaves permanentes
         st.session_state.batida_proto = ""
         st.session_state.batida_tec = ""
         st.session_state.batida_cx = ""
@@ -56,18 +56,19 @@ def render():
     # --- CABEÇALHO ---
     c1, c2, c3, c_btn = st.columns([2, 2, 1, 0.5])
     with c1: 
-        st.text_input("PROTOCOLO", value=st.session_state.batida_proto, 
-                      key=f"temp_batida_proto_{v}", on_change=salvar_campo, args=("batida_proto",))
+        proto = st.text_input("PROTOCOLO", value=st.session_state.batida_proto, 
+                              key=f"temp_batida_proto_{v}", on_change=salvar_campo, args=("batida_proto",))
     with c2: 
-        st.text_input("TÉCNICO", value=st.session_state.batida_tec, 
-                      key=f"temp_batida_tec_{v}", on_change=salvar_campo, args=("batida_tec",))
+        tec = st.text_input("TÉCNICO", value=st.session_state.batida_tec, 
+                            key=f"temp_batida_tec_{v}", on_change=salvar_campo, args=("batida_tec",))
     with c3: 
-        st.text_input("CAIXA", value=st.session_state.batida_cx, 
-                      key=f"temp_batida_cx_{v}", on_change=salvar_campo, args=("batida_cx",))
+        cx = st.text_input("CAIXA", value=st.session_state.batida_cx, 
+                           key=f"temp_batida_cx_{v}", on_change=salvar_campo, args=("batida_cx",))
     with c_btn: 
         st.write(" ") 
-        if st.button("🗑️"): limpar_campos()
+        if st.button("🗑️", help="Limpar tudo"): limpar_campos()
 
+    # --- LISTAGEM DE PORTAS ---
     portas_str = ", ".join(st.session_state.portas) if st.session_state.portas else "Nenhuma"
     st.info(f"**Portas Liberadas:** {portas_str}")
 
@@ -82,30 +83,46 @@ def render():
         for i in range(16):
             r = st.columns(pesos)
             r[0].write(f"{i+1:02d}")
-            # Campos de texto
-            for idx, pref in enumerate(['e_b_', 's_b_', 'id_b_'], start=1):
+            # Colunas de texto (Etiqueta, Serial, ID)
+            for pref in ['e_b_', 's_b_', 'id_b_']:
                 chave = f"{pref}{i}"
-                r[idx].text_input(f"in_{chave}", value=st.session_state[chave], 
-                                  key=f"temp_{chave}_{v}", on_change=salvar_campo, 
-                                  args=(chave,), label_visibility="collapsed")
-            # Checkbox
-            r[4].checkbox(f"cb_{i}", value=st.session_state[f"c_batida_{i}"], 
-                          key=f"temp_c_batida_{i}_{v}", on_change=salvar_checkbox, 
-                          args=(i,), label_visibility="collapsed")
+                r[['e_b_', 's_b_', 'id_b_'].index(pref) + 1].text_input(
+                    f"in_{chave}", value=st.session_state[chave], 
+                    key=f"temp_{chave}_{v}", on_change=salvar_campo, 
+                    args=(chave,), label_visibility="collapsed"
+                )
+            # Coluna Checkbox (Liberação)
+            r[4].checkbox(
+                f"cb_{i}", value=st.session_state[f"c_batida_{i}"], 
+                key=f"temp_c_batida_{i}_{v}", on_change=atualizar_portas, 
+                args=(i,), label_visibility="collapsed"
+            )
 
     # --- RELATÓRIO E ENVIO ---
     with col_lateral:
         st.write("**ANOTAÇÕES**")
-        st.text_area("Notas", value=st.session_state.anot_batida, height=100, 
-                     key=f"temp_anot_batida_{v}", on_change=salvar_campo, args=("anot_batida",), label_visibility="collapsed")
+        notas = st.text_area("Notas", value=st.session_state.anot_batida, height=80, 
+                             key=f"temp_anot_batida_{v}", on_change=salvar_campo, args=("anot_batida",), label_visibility="collapsed")
         
-        res = f"Protocolo: {st.session_state.batida_proto}\nCaixa: {st.session_state.batida_cx}\nPortas: {portas_str}\n"
-        st.text_area("Relatório Final", res, height=250)
+        # MONTAGEM DO TEXTO (Usa as variáveis locais proto, cx, portas_str para atualizar NA HORA)
+        texto_relatorio = (
+            f"✅ *BATIDA DE CAIXA REALIZADA*\n"
+            f"🔢 Protocolo: {proto}\n"
+            f"👷 Técnico: {tec}\n"
+            f"📦 Caixa: {cx}\n"
+            f"🔌 Portas: {portas_str}\n"
+            f"📝 Notas: {notas}\n"
+        )
+        
+        st.text_area("📋 Relatório Final (Copiar)", value=texto_relatorio, height=200)
 
         if st.button("💾 REGISTRAR PLANILHA", use_container_width=True, type="primary"):
-            aba = conectar_google_sheets()
-            if aba:
-                fuso = pytz.timezone('America/Sao_Paulo')
-                data = datetime.now(fuso).strftime("%d/%m/%Y %H:%M")
-                aba.append_row([data, st.session_state.batida_proto, st.session_state.batida_cx, portas_str])
-                st.success("Registrado!")
+            if not proto or not cx:
+                st.error("Preencha Protocolo e Caixa!")
+            else:
+                aba = conectar_google_sheets()
+                if aba:
+                    fuso = pytz.timezone('America/Sao_Paulo')
+                    agora = datetime.now(fuso).strftime("%d/%m/%Y %H:%M")
+                    aba.append_row([agora, proto, tec, cx, portas_str, notas])
+                    st.success("Dados salvos no Google Sheets!")
