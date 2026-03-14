@@ -4,25 +4,53 @@ from datetime import datetime
 from modules import amarelos, batida_caixa, encerramentos, portabilidade
 from styles import apply_styles
 
-# 1. Configuração da Página
+# 1. CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="Sistema Atendimento Técnico", layout="wide", page_icon="📊")
 
-# 2. Aplicar Estilos
-apply_styles()
+# 2. INICIALIZAÇÃO DE VARIÁVEIS (BOOTSTRAP)
+# Isso impede o AttributeError no Batida de Caixa e outros módulos
+def inicializar_estado():
+    # Variáveis do Batida de Caixa
+    if 'batida_version' not in st.session_state:
+        st.session_state.batida_version = 0
+    if 'batida_proto' not in st.session_state:
+        st.session_state.batida_proto = ""
+    if 'batida_tec' not in st.session_state:
+        st.session_state.batida_tec = ""
+    if 'batida_cx' not in st.session_state:
+        st.session_state.batida_cx = ""
+    if 'anot_batida' not in st.session_state:
+        st.session_state.anot_batida = ""
+    if 'portas' not in st.session_state:
+        st.session_state.portas = []
+    
+    # Inicializa as 16 linhas da tabela do Batida de Caixa
+    for i in range(16):
+        if f'e_b_{i}' not in st.session_state: st.session_state[f'e_b_{i}'] = ""
+        if f's_b_{i}' not in st.session_state: st.session_state[f's_b_{i}'] = ""
+        if f'id_b_{i}' not in st.session_state: st.session_state[f'id_b_{i}'] = ""
+        if f'c_batida_{i}' not in st.session_state: st.session_state[f'c_batida_{i}'] = False
 
-# 3. Fuso Horário e Gatilho (Independente da aba selecionada)
+    # Variáveis de Controle do Robô (Amarelos)
+    if 'dia_ultimo_disparo' not in st.session_state:
+        st.session_state.dia_ultimo_disparo = 0
+
+# Executa a inicialização
+inicializar_estado()
+
+# 3. ESTILOS E FUSO
+apply_styles()
 fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
-# Verifica o envio das 23:45
+# 4. GATILHO AUTOMÁTICO (23:45)
 if agora.hour == 23 and agora.minute == 45:
-    if "dia_ultimo_disparo" not in st.session_state or st.session_state["dia_ultimo_disparo"] != agora.day:
-        # Roda em segundo plano sem travar a UI
+    if st.session_state.dia_ultimo_disparo != agora.day:
         sucesso = amarelos.realizar_coleta_e_envio_automatizado()
         if sucesso:
-            st.session_state["dia_ultimo_disparo"] = agora.day
+            st.session_state.dia_ultimo_disparo = agora.day
 
-# 4. MENU LATERAL (Sidebar)
+# 5. MENU LATERAL
 st.sidebar.title("🚀 Menu Principal")
 paginas = [
     "📑 Resumo Encerramento", 
@@ -35,7 +63,7 @@ escolha = st.sidebar.radio("Selecione a ferramenta:", paginas)
 st.sidebar.divider()
 st.sidebar.write(f"🕒 **Brasília:** {agora.strftime('%H:%M:%S')}")
 
-# 5. CARREGAMENTO CONDICIONAL (Só carrega o que você clicar)
+# 6. NAVEGAÇÃO
 if escolha == "📑 Resumo Encerramento":
     encerramentos.render()
 
