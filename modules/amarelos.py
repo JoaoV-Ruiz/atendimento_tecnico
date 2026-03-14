@@ -15,6 +15,9 @@ import pytz
 from styles import apply_styles
 
 # --- CONFIGURAÇÕES ---
+URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
+URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
+
 TABELA_NOMES = {
     "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
     "956": "ERICA MARLOW", "1153": "MARIA EDUARDA", "1163": "JULIA DUARTE",
@@ -23,10 +26,6 @@ TABELA_NOMES = {
     "441": "CAIO ALVES DOS REIS", "968": "SINDEW CRIZEL", "322" : "IGOR SALDANHA"
 }
 
-URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
-URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
-
-# --- APOIO ---
 def conectar_google_sheets():
     try:
         creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
@@ -34,29 +33,22 @@ def conectar_google_sheets():
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
         client = gspread.authorize(creds)
         return client.open_by_url(st.secrets["SPREADSHEET_URL"])
-    except Exception as e:
-        print(f"Erro Sheets: {e}")
-        return None
+    except: return None
 
 def salvar_fechamento_google_sheets(df_atual, total_tela, total_checados):
     planilha = conectar_google_sheets()
     if not planilha: return
     try:
-        fuso_br = pytz.timezone('America/Sao_Paulo')
-        agora_br = datetime.now(fuso_br)
-        nome_aba = f"FECHAMENTO_{agora_br.strftime('%d-%m-%Y')}"
-        try:
-            aba = planilha.worksheet(nome_aba)
+        nome_aba = f"FECHAMENTO_{datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%d-%m-%Y')}"
+        try: aba = planilha.worksheet(nome_aba)
         except:
             aba = planilha.add_worksheet(title=nome_aba, rows="100", cols="10")
-            aba.append_row(["Colaborador", "Qtd", "Data/Hora", "Total Tela", "Total Checados"])
+            aba.append_row(["Colaborador", "Qtd", "Data", "Total", "Checados"])
         
-        data_str = agora_br.strftime("%d/%m/%Y %H:%M:%S")
+        data_str = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%d/%m/%Y %H:%M")
         linhas = [[r["Colaborador"], r["Qtd"], data_str, total_tela, total_checados] for _, r in df_atual.iterrows()]
         aba.append_rows(linhas)
-        print(f"✅ Salvo no Sheets: {nome_aba}")
-    except Exception as e:
-        print(f"❌ Erro ao salvar Sheets: {e}")
+    except: pass
 
 @st.cache_data(ttl=60, show_spinner=False)
 def disparar_automacao():
@@ -71,10 +63,19 @@ def disparar_automacao():
         wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
         driver.find_element(By.NAME, "entrar").click()
+        
+        # Espera carregar as tabelas
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
-        time.sleep(3)
+        time.sleep(5) # Tempo para o JS renderizar tudo
+        
+        # Coleta os links de checagem (Sucesso)
         links = driver.find_elements(By.XPATH, "//a[@data-checado]")
         total_tela = len(links)
+        
+        # Coleta as TRs de falha (O que você pediu)
+        tr_falhas = driver.find_elements(By.CSS_SELECTOR, "tbody.busca-falha tr")
+        total_tr_falha = len(tr_falhas)
+        
         contagem = {nome: 0 for nome in TABELA_NOMES.values()}
         total_checados = 0
         for link in links:
@@ -82,56 +83,44 @@ def disparar_automacao():
             if val in TABELA_NOMES:
                 contagem[TABELA_NOMES[val]] += 1
                 total_checados += 1
+        
         df = pd.DataFrame(list(contagem.items()), columns=["Colaborador", "Qtd"])
-        return df[df["Qtd"] > 0].sort_values(by="Qtd", ascending=False), total_checados, total_tela
+        df_final = df[df["Qtd"] > 0].sort_values(by="Qtd", ascending=False)
+        
+        # Retornamos também o total de falhas
+        return df_final, total_checados, total_tela, total_tr_falha
+    except Exception as e:
+        print(f"Erro coleta: {e}")
+        return None, 0, 0, 0
     finally:
         driver.quit()
 
-def enviar_relatorio_chat(df_dados, total_tela, total_checados):
+def enviar_relatorio_chat(df_dados, total_tela, total_checados, total_falhas):
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
     driver = webdriver.Chrome(options=options)
-    wait = WebDriverWait(driver, 45)
-    
     try:
-        print("--- INICIANDO FLUXO DE ENVIO ---")
         driver.get(URL_CHAT)
-        
-        # 1. Login
-        print("Passo 1: Fazendo Login...")
+        wait = WebDriverWait(driver, 40)
         wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(st.secrets["EMAIL_CORP"])
         driver.find_element(By.NAME, "password").send_keys(st.secrets["SENHA_ZULIP"])
         driver.find_element(By.NAME, "button").click()
         
-        # 2. Localizar Contato
-        print("Passo 2: Buscando contato 'Cauê Arócha'...")
-        time.sleep(8) # Tempo para carregar a lista lateral
-        
-        # Tenta o seu XPath original que funcionava antes
-        try:
-            xpath_caue = "//span[contains(@class, 'conversation-partners-list') and contains(text(), 'Cauê Arócha')]"
-            contato = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_caue)))
-        except:
-            print("⚠️ XPath original falhou, tentando busca por texto genérica...")
-            xpath_caue = "//*[contains(text(), 'Cauê Arócha')]"
-            contato = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_caue)))
-
+        xpath_caue = "//*[contains(text(), 'Cauê Arócha')]"
+        contato = wait.until(EC.element_to_be_clickable((By.XPATH, xpath_caue)))
         driver.execute_script("arguments[0].click();", contato)
         time.sleep(3)
 
-        # 3. Mensagem
-        print("Passo 3: Escrevendo Mensagem...")
-        agora_br = datetime.now(pytz.timezone('America/Sao_Paulo'))
+        agora = datetime.now(pytz.timezone('America/Sao_Paulo'))
         mensagem = (
             f"📊 *Relatório Automático de Provisionamento*\n"
-            f"🕒 Horário: {agora_br.strftime('%H:%M:%S')}\n"
+            f"🕒 Horário: {agora.strftime('%H:%M:%S')}\n"
             f"----------------------------------\n"
             f"✅ *Checados:* {total_checados}\n"
-            f"⏳ *Pendentes:* {total_tela - total_checados}\n"
-            f"📈 *Total Fila:* {total_tela}\n"
+            f"❌ *TR (Falhas):* {total_falhas}\n"
+            f"📈 *Total Fila:* {total_tela + total_falhas}\n"
             f"----------------------------------"
         )
 
@@ -140,28 +129,20 @@ def enviar_relatorio_chat(df_dados, total_tela, total_checados):
         driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
         time.sleep(2)
         
-        # 4. Enviar
-        print("Passo 4: Clicando em Enviar...")
         btn_enviar = wait.until(EC.element_to_be_clickable((By.ID, "compose-send-button")))
         driver.execute_script("arguments[0].click();", btn_enviar)
-        
-        print("✅ SUCESSO: Relatório enviado para o Chat!")
         return True
-
     except Exception as e:
-        print(f"❌ ERRO NO ENVIO: {str(e)}")
-        # Tira print do erro para debug
-        driver.save_screenshot("erro_debug_chat.png")
+        print(f"Erro Chat: {e}")
         return False
-    finally:
-        driver.quit()
+    finally: driver.quit()
 
 def realizar_coleta_e_envio_automatizado():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Iniciando tarefa agendada...")
-    df, checados, tela = disparar_automacao()
+    # Coleta dados novos para o envio
+    df, checados, tela, falhas = disparar_automacao()
     if df is not None:
         salvar_fechamento_google_sheets(df, tela, checados)
-        return enviar_relatorio_chat(df, tela, checados)
+        return enviar_relatorio_chat(df, tela, checados, falhas)
     return False
 
 def render():
@@ -169,26 +150,23 @@ def render():
     st_autorefresh(interval=30000, key="refresh_amarelos")
     fuso = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso)
-    
     st.title("📊 Monitor de Provisionamento")
     
     if 'dados_cache' not in st.session_state: st.session_state['dados_cache'] = None
     if 'ultima_coleta' not in st.session_state: st.session_state['ultima_coleta'] = agora - timedelta(days=1)
 
     if st.session_state['dados_cache'] is None or (agora - st.session_state['ultima_coleta'] >= timedelta(minutes=5)):
-        df, checados, tela = disparar_automacao()
-        st.session_state['dados_cache'] = (df, checados, tela)
+        df, checados, tela, falhas = disparar_automacao()
+        st.session_state['dados_cache'] = (df, checados, tela, falhas)
         st.session_state['ultima_coleta'] = agora
 
     if st.session_state['dados_cache']:
-        df_d, t_c, t_t = st.session_state['dados_cache']
+        df_d, t_c, t_t, t_f = st.session_state['dados_cache']
         st.caption(f"📥 Última atualização: {st.session_state['ultima_coleta'].strftime('%H:%M:%S')}")
-        
         m1, m2, m3 = st.columns(3)
-        m1.metric("Fila Total", t_t)
+        m1.metric("Fila Sucesso", t_t)
         m2.metric("Checados", t_c)
-        m3.metric("Pendente", t_t - t_c)
-        
+        m3.metric("TR (Falhas)", t_f)
         st.divider()
         c1, c2 = st.columns([1, 1.5])
         c1.dataframe(df_d, use_container_width=True, hide_index=True)
