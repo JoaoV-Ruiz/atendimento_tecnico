@@ -61,7 +61,6 @@ paginas = [
 escolha = st.sidebar.radio("Selecione a ferramenta:", paginas)
 
 st.sidebar.divider()
-st.sidebar.write(f"🕒 **Brasília:** {agora.strftime('%H:%M:%S')}")
 
 # 6. NAVEGAÇÃO
 if escolha == "📑 Resumo Encerramento":
