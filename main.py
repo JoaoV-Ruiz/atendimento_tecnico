@@ -38,8 +38,8 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # 3. GATILHO AUTOMÁTICO (Ajuste a hora/minuto para seu teste atual)
-HORA_RELATORIO = 23
-MINUTO_RELATORIO = 45
+HORA_RELATORIO = 13
+MINUTO_RELATORIO = 10
 
 if agora.hour == HORA_RELATORIO and agora.minute == MINUTO_RELATORIO:
     # Verificamos se hoje já foi disparado
