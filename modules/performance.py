@@ -83,7 +83,7 @@ def formatar_segundos(segundos):
 def load_technical_data():
     # No Streamlit Cloud, use st.secrets em vez de .env
     url = st.secrets.get("URL_PLANILHA")
-    creds_json_str = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
+    creds_json_str = st.secrets.get("GOOGLE_CREDENTIALS_JSON")
     
     if not url or not creds_json_str:
         st.error("Credenciais não encontradas nos Secrets.")
@@ -220,51 +220,80 @@ def disparar_automacao_erp():
     finally:
         driver.quit()
 
-# --- INTERFACE ---
-st.title("📈 Performance Unificada")
+# --- INTERFACE PRINCIPAL ---
+def main():
+    st_autorefresh(interval=10 * 60 * 1000, key="refresh_global")
     
-df_erp = disparar_automacao_erp()
-dados_tme = load_technical_data()
+    dados_tme_brutos = load_technical_data()
+    if not dados_tme_brutos:
+        st.warning("Aguardando base de dados da Planilha...")
+        return
 
-if dados_tme:
-        lista_nomes = sorted([l[0] for l in dados_tme if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-        selecionado = st.selectbox("👤 Selecionar Atendente:", options=lista_nomes)
+    lista_nomes_planilha = sorted([l[0] for l in dados_tme_brutos if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
+    
+    st.markdown("### 👤 Selecione o Atendente")
+    selecionado = st.selectbox("Escolha um nome:", options=lista_nomes_planilha, label_visibility="collapsed")
+    
+    # Rodar automação
+    df_erp = disparar_automacao_erp()
 
-        mapa = {l[0]: l for l in dados_tme if len(l) > 0}
-        linha = mapa[selecionado][3:]
-        grafico_raw = [linha[i] if i < len(linha) else "" for i in range(dia_ontem)]
-        tempos = [converter_para_segundos(t) for t in grafico_raw]
-        validos = [s for s in tempos if s is not None]
-        tme_media = formatar_segundos(sum(validos)/len(validos)) if validos else "00:00:00"
+    # Tratamento TME
+    mapa = {l[0]: l for l in dados_tme_brutos if len(l) > 0}
+    linha_tecnico = mapa[selecionado]
+    dados_tecnico_raw = linha_tecnico[3:]
+    
+    # Segurança para IndexError: Preenche até o dia de ontem
+    dados_ate_ontem = [dados_tecnico_raw[i] if i < len(dados_tecnico_raw) else "" for i in range(DIA_ONTEM)]
+    tempos_seg = [converter_para_segundos(t) for t in dados_ate_ontem]
+    tempos_validos = [s for s in tempos_seg if s is not None]
+    
+    tme_acumulado = formatar_segundos(sum(tempos_validos)/len(tempos_validos)) if tempos_validos else "00:00:00"
 
-        df_tec = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
+    # Tratamento ERP
+    df_tec_erp = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
+    
+    # --- MÉTRICAS ---
+    st.divider()
+    col_n, col_m1, col_m2 = st.columns([2, 1, 1])
+    with col_n:
+        st.markdown(f"<h2 style='margin:0;'>{selecionado}</h2>", unsafe_allow_html=True)
+        st.caption(f"Performance referente ao mês {MES_ATUAL_NUM:02d}/{ANO_ATUAL_NUM}")
+    with col_m1:
+        st.metric("TME Acumulado", tme_acumulado)
+    with col_m2:
+        st.metric("Total Encerramentos", f"{len(df_tec_erp)} un")
 
-        # Métricas
-        st.divider()
-        m1, m2 = st.columns(2)
-        m1.metric("TME Acumulado", tme_media)
-        m2.metric("Total Encerramentos", f"{len(df_tec)} un")
-        
-        # O DESIGN BONITINHO (Grid Diário)
-        st.subheader("📅 Histórico Diário")
-        counts = df_tec['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec.empty else {}
-        
-        grid = st.columns(7)
-        for i in range(dia_ontem):
-            dia = i + 1
-            with grid[i % 7]:
-                val_tme = str(grafico_raw[i]).strip()
-                seg = tempos[i]
-                qtd = counts.get(dia, 0)
-                
-                # Cores
-                cor_tme = "#FFFFFF"
-                if val_tme in ["", "FORA"]: cor_tme = "#FFD700"
-                elif seg is not None and seg > 15: cor_tme = "#FF4B4B"
+    # --- HISTÓRICO DIÁRIO ---
+    st.subheader("📅 Histórico Diário")
+    grid = st.columns(7)
+    counts_enc = df_tec_erp['DATA_REF'].dt.day.value_counts() if not df_tec_erp.empty else {}
 
-                st.markdown(f"""
-                    <div style="background:#1d2129; padding:10px; border-radius:10px; border:1px solid #30363d; margin-bottom:10px; text-align:center;">
-                        <div style="color:#8b949e; font-size:0.8rem; margin-bottom:5px;">{dia:02d}/{mes_atual:02d}</div>
-                        <div style="font-size:1.1rem; font-weight:bold; color:{cor_tme};">⏱️ {val_tme if val_tme else '---'}</div>
-                        <div style="font-size:0.9rem; color:#4da3ff; margin-top:5px;">ENC: {qtd}</div>
-                    </div>
+    for i in range(DIA_ONTEM):
+        dia = i + 1
+        with grid[i % 7]:
+            val_tme = str(dados_ate_ontem[i]).strip()
+            seg = tempos_seg[i]
+            qtd = counts_enc.get(dia, 0)
+            
+            # REGRA: Maior que 15 segundos = Vermelho
+            is_fora = val_tme in ["", "FORA"]
+            if is_fora:
+                cor_tme = "#FFD700" # Amarelo para FORA
+                display_tme = "FORA"
+            elif seg is not None and seg > 15:
+                cor_tme = "#FF4B4B" # Vermelho para > 15s
+                display_tme = val_tme
+            else:
+                cor_tme = "#FFFFFF" # Branco para normal
+                display_tme = val_tme
+
+            st.markdown(f"""
+                <div class="dia-container">
+                    <div style="color:#8b949e; font-size:0.8rem; margin-bottom:5px;">{dia:02d}/{MES_ATUAL_NUM:02d}</div>
+                    <div style="font-size:1.1rem; font-weight:bold; color:{cor_tme};">⏱️ {display_tme}</div>
+                    <div style="font-size:1.1rem; font-weight:bold; color:#8b949e">ENC: {qtd}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
