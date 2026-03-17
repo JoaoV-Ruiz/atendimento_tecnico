@@ -221,12 +221,12 @@ def disparar_automacao_erp():
         driver.quit()
 
 # --- INTERFACE ---
-    st.title("📈 Performance Unificada")
+st.title("📈 Performance Unificada")
     
-    df_erp = disparar_automacao_erp()
-    dados_tme = load_technical_data()
+df_erp = disparar_automacao_erp()
+dados_tme = load_technical_data()
 
-    if dados_tme:
+if dados_tme:
         lista_nomes = sorted([l[0] for l in dados_tme if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
         selecionado = st.selectbox("👤 Selecionar Atendente:", options=lista_nomes)
 
