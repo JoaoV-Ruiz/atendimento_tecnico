@@ -129,109 +129,122 @@ def disparar_automacao_erp(mes, ano):
     chrome_options.add_argument("--headless")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
 
     abs_download_path = str(DOWNLOAD_FOLDER.absolute())
-    prefs = {"download.default_directory": abs_download_path}
+    prefs = {
+        "download.default_directory": abs_download_path,
+        "download.prompt_for_download": False,
+        "directory_upgrade": True,
+        "safebrowsing.enabled": True
+    }
     chrome_options.add_experimental_option("prefs", prefs)
 
     driver = None
     try:
         driver = webdriver.Chrome(options=chrome_options)
-        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
-        wait = WebDriverWait(driver, 40)
-
-        # 1. LOGIN (Usando atributos mais estáveis que o ID :r0:)
-        driver.get(URL_ERP)
-        time.sleep(5)
+        driver.execute_cdp_cmd("Page.setDownloadBehavior", {
+            "behavior": "allow",
+            "downloadPath": abs_download_path
+        })
         
+        # Aumentamos o wait para 60 segundos por causa da lentidão do servidor
+        wait = WebDriverWait(driver, 60)
+
+        # 1. LOGIN (Usando busca por texto para fugir de IDs dinâmicos)
+        driver.get(URL_ERP)
+        time.sleep(10) # Espera o carregamento inicial da página de login
+
         try:
-            # Busca pelo atributo 'name' ou 'type' em vez do ID dinâmico
-            user_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text']")))
-            pass_field = driver.find_element(By.XPATH, "//input[@type='password']")
+            # Localiza os campos ignorando IDs, focando no tipo do input
+            u_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text']")))
+            p_field = driver.find_element(By.XPATH, "//input[@type='password']")
             
-            driver.execute_script("arguments[0].value = arguments[1];", user_field, ERP_USER)
-            driver.execute_script("arguments[0].value = arguments[1];", pass_field, ERP_PASS)
+            # Limpa e preenche via JS para garantir que o React capture o valor
+            driver.execute_script("arguments[0].value = '';", u_field)
+            u_field.send_keys(ERP_USER)
+            driver.execute_script("arguments[0].value = '';", p_field)
+            p_field.send_keys(ERP_PASS)
             
-            # Clique no botão de entrar via JavaScript para evitar 'InterceptedError'
+            # Clique no botão que contenha o texto 'Entrar'
             btn_login = driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
             driver.execute_script("arguments[0].click();", btn_login)
-            time.sleep(10)
-        except:
-            pass # Pode já estar logado
-
-        # 2. FILTROS (Navegação direta para limpar a tela)
-        driver.get(URL_ERP)
-        time.sleep(7)
-
-        # Abrir Filtro Avançado
-        btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']")))
-        driver.execute_script("arguments[0].click();", btn_filtro)
-        time.sleep(3)
-
-        # Selecionar Equipe (Usando a lógica de busca por texto)
-        try:
-            input_equipe = driver.find_element(By.ID, "teamId")
-            driver.execute_script("arguments[0].click();", input_equipe)
-            time.sleep(1)
             
-            filter_input = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
-            filter_input.send_keys("COP Encerramentos")
-            time.sleep(2)
-            filter_input.send_keys(Keys.ENTER)
-            
-            # Clique no resultado da lista
-            opcao = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]")))
-            driver.execute_script("arguments[0].click();", opcao)
-            
-            btn_confirmar = driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]")
-            driver.execute_script("arguments[0].click();", btn_confirmar)
-            time.sleep(2)
+            # Espera o login processar (o URL deve mudar ou o dashboard aparecer)
+            time.sleep(12)
         except Exception as e:
-            print(f"Erro nos filtros de equipe: {e}")
+            print(f"Aviso: Falha ou já logado no ERP. {e}")
 
-        # 3. DATAS (Limpeza e preenchimento via JS)
-        hj = datetime.now()
-        ultimo_dia = calendar.monthrange(hj.year, hj.month)[1]
-        data_fim = f"{ultimo_dia:02d}/{hj.month:02d}/{hj.year}"
+        # 2. REDIRECIONAMENTO LIMPO
+        # Forçamos a ida para a URL após o login para fechar qualquer modal de aviso
+        driver.get(URL_ERP)
+        time.sleep(10)
 
-        # Preenche a data de fechamento final
+        # 3. FILTRO AVANÇADO (Caminho Crítico)
         try:
-            campo_data = driver.find_element(By.ID, "finalReportClosingDate")
-            driver.execute_script("arguments[0].value = arguments[1];", campo_data, data_fim)
-            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", campo_data)
+            # Localiza o botão de filtro pelo atributo tooltip
+            btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@tooltip, 'Filtro')]")))
+            driver.execute_script("arguments[0].click();", btn_filtro)
+            time.sleep(5)
+
+            # Seleciona Equipe
+            campo_equipe = wait.until(EC.element_to_be_clickable((By.ID, "teamId")))
+            driver.execute_script("arguments[0].click();", campo_equipe)
             
-            btn_aplicar = driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]")
-            driver.execute_script("arguments[0].click();", btn_aplicar)
-            time.sleep(10) # Tempo para o ERP processar a busca
-        except: pass
+            filtro_txt = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+            filtro_txt.send_keys("COP Encerramentos")
+            time.sleep(3)
+            filtro_txt.send_keys(Keys.ENTER)
+            
+            # Clica no item da lista que apareceu
+            item_lista = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]")))
+            driver.execute_script("arguments[0].click();", item_lista)
+            
+            # Botão Confirmar do modal de equipe
+            btn_conf = driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]")
+            driver.execute_script("arguments[0].click();", btn_conf)
+            time.sleep(3)
+        except Exception as e:
+            st.error(f"Erro na fase de Filtros: {e}")
 
-        # 4. EXPORTAÇÃO (O ponto onde estava dando erro)
+        # 4. EXPORTAR (Onde o stacktrace costuma estourar)
         try:
-            # Localiza o botão de exportar (pode ser pelo tooltip ou pelo ícone)
+            # Localiza o botão de exportar (ícone de impressora/nuvem)
             btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(@tooltip, 'Exportar')]")))
             driver.execute_script("arguments[0].click();", btn_exp)
-            time.sleep(2)
+            time.sleep(3)
             
+            # Clica no botão .CSV
             btn_csv = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]")))
             driver.execute_script("arguments[0].click();", btn_csv)
             
-            # Espera o download (Monitorando a pasta)
-            time.sleep(20)
-            caminho = mover_arquivo_recente()
+            # MONITOR DE DOWNLOAD (Esperando o arquivo aparecer na pasta /tmp)
+            start_time = time.time()
+            caminho_final = None
+            while time.time() - start_time < 45: # 45 segundos de timeout para o download
+                arquivos = list(DOWNLOAD_FOLDER.glob("*.csv"))
+                if arquivos:
+                    # Pega o arquivo que não seja temporário (.crdownload)
+                    caminho_final = str(max(arquivos, key=os.path.getmtime))
+                    break
+                time.sleep(2)
             
-            if caminho:
-                return analisar_dados_encerramentos(caminho, mes, ano)
+            if caminho_final:
+                return analisar_dados_encerramentos(caminho_final, mes, ano)
+            else:
+                st.error("Arquivo não baixado a tempo.")
         except Exception as e:
-            st.error(f"Erro na fase de exportação: {e}")
-            
+            st.error(f"Erro na fase de Exportação: {e}")
+
         return None
 
     except Exception as e:
-        st.error(f"Erro Automação ERP: {e}")
+        st.error(f"Erro Geral Automação: {e}")
         return None
     finally:
-        if driver: driver.quit()
+        if driver:
+            driver.quit()
 
 # --- INTERFACE PRINCIPAL ---
 def render():
