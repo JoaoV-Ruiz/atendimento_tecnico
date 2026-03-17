@@ -20,9 +20,18 @@ from pathlib import Path
 from styles import apply_styles
 from oauth2client.service_account import ServiceAccountCredentials
 
-# --- 1. CONFIGURAÇÃO DE CAMINHOS ---
-# Usamos /tmp para garantir permissão de escrita no Streamlit Cloud
-DOWNLOAD_FOLDER = Path("/tmp/performance_downloads")
+# --- 1. CONFIGURAÇÃO DE SEGREDOS COM TRATAMENTO DE ERRO ---
+# Usamos .get() para evitar KeyError. Se não existir, o valor será None.
+ERP_USER = st.secrets.get("ERP_USER")
+ERP_PASS = st.secrets.get("ERP_PASS")
+URL_PLANILHA = st.secrets.get("URL_PLANILHA")
+# Verifique se nos seus Secrets o nome é GOOGLE_JSON_CREDENTIALS ou o final _2
+GOOGLE_JSON = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
+
+# Definição de Caminhos
+BASE_DIR = Path(__file__).parent.parent
+NOME_DOWNLOAD = (st.secrets.get("DOWNLOAD_PATH") or "downloads").strip("/")
+DOWNLOAD_FOLDER = Path("/tmp") / NOME_DOWNLOAD
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 URL_ERP = "https://erp.osirnet.com.br/all_solicitations#/"
@@ -43,15 +52,13 @@ MAPEAMENTO_TECNICOS = {
     "Vinicius Maciel Coppa": "VINICIUS COPPA"
 }
 
-# --- FUNÇÕES DE AUXÍLIO E LOG ---
+# --- FUNÇÕES DE LOG E SUPORTE ---
 
 def log_processo(mensagem):
-    """Imprime no console do Streamlit Cloud (Manage App > Logs)"""
     agora = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%H:%M:%S')
-    print(f"[ROBÔ ERP {agora}] {mensagem}")
+    print(f"[LOG PERFORMANCE {agora}] {mensagem}")
 
 def limpar_pasta_downloads():
-    """Remove arquivos antigos para não processar CSV errado"""
     arquivos = glob.glob(os.path.join(str(DOWNLOAD_FOLDER), "*"))
     for f in arquivos:
         try: os.remove(f)
@@ -59,14 +66,10 @@ def limpar_pasta_downloads():
     log_processo("🧹 Pasta temporária limpa.")
 
 def mover_arquivo_recente():
-    """Busca o arquivo CSV recém baixado"""
-    time.sleep(4)
+    time.sleep(5) # Espera o buffer do sistema
     arquivos = list(DOWNLOAD_FOLDER.glob("*.csv"))
-    if not arquivos: 
-        return None
-    # Pega o arquivo com a data de modificação mais recente
-    arquivo_recente = max(arquivos, key=os.path.getmtime)
-    return str(arquivo_recente)
+    if not arquivos: return None
+    return str(max(arquivos, key=os.path.getmtime))
 
 def super_limpeza(texto):
     if not isinstance(texto, str): return ""
@@ -91,16 +94,19 @@ def converter_para_segundos(tempo_str):
 def formatar_segundos(segundos):
     return str(timedelta(seconds=int(segundos)))
 
-# --- COLETA DE DADOS ---
+# --- PROCESSAMENTO DE DADOS ---
 
 @st.cache_data(ttl=600)
 def load_technical_data():
+    if not GOOGLE_JSON or not URL_PLANILHA:
+        log_processo("❌ Erro: Credenciais Google ou URL não encontradas nos Secrets.")
+        return None
     try:
-        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS_2"])
+        creds_info = json.loads(GOOGLE_JSON)
         scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
         client = gspread.authorize(creds)
-        spreadsheet = client.open_by_url(st.secrets["URL_PLANILHA"])
+        spreadsheet = client.open_by_url(URL_PLANILHA)
         sheet = spreadsheet.worksheet("AtendimentoTécnico")
         return sheet.get("A8:AF20")
     except Exception as e:
@@ -117,101 +123,68 @@ def analisar_dados_encerramentos(caminho_csv, mes, ano):
         possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável", "Nome"]
         col_tec = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
         
-        def vincular_nome_planilha(nome_erp):
-            nome_erp_limpo = super_limpeza(str(nome_erp))
-            for nome_planilha, termo_busca in MAPEAMENTO_TECNICOS.items():
-                if super_limpeza(termo_busca) in nome_erp_limpo:
-                    return nome_planilha
-            return None
-
-        df['Atendente_Planilha'] = df[col_tec].apply(vincular_nome_planilha)
+        df['Atendente_Planilha'] = df[col_tec].apply(lambda x: next((p for p, t in MAPEAMENTO_TECNICOS.items() if super_limpeza(t) in super_limpeza(str(x))), None))
         df = df.dropna(subset=['Atendente_Planilha', 'DATA_REF'])
         return df[(df['DATA_REF'].dt.month == mes) & (df['DATA_REF'].dt.year == ano)]
     except Exception as e:
-        log_processo(f"🚨 Erro Processamento CSV: {e}")
+        log_processo(f"🚨 Erro CSV: {e}")
         return None
 
-@st.cache_data(ttl=1800, show_spinner="🤖 Robô sincronizando ERP... acompanhe nos logs.")
+@st.cache_data(ttl=1800, show_spinner="🤖 Sincronizando ERP...")
 def disparar_automacao_erp(mes, ano):
+    if not ERP_USER or not ERP_PASS:
+        log_processo("❌ Erro: Usuário/Senha do ERP não definidos.")
+        return None
+
     limpar_pasta_downloads()
-    
     options = Options()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1920,1080")
-
-    prefs = {"download.default_directory": str(DOWNLOAD_FOLDER.absolute())}
-    options.add_experimental_option("prefs", prefs)
+    options.add_experimental_option("prefs", {"download.default_directory": str(DOWNLOAD_FOLDER.absolute())})
 
     driver = None
     try:
-        log_processo("🌐 Abrindo Chrome Headless...")
         driver = webdriver.Chrome(options=options)
         driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": str(DOWNLOAD_FOLDER.absolute())})
         wait = WebDriverWait(driver, 60)
 
         # 1. Login
-        log_processo(f"🔗 Acessando {URL_ERP}")
+        log_processo("🔑 Acessando ERP...")
         driver.get(URL_ERP)
-        time.sleep(6)
+        time.sleep(5)
         
-        log_processo("🔑 Realizando Login...")
-        u_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text']")))
-        p_field = driver.find_element(By.XPATH, "//input[@type='password']")
-        
-        driver.execute_script("arguments[0].value = arguments[1];", u_field, st.secrets["ERP_USER"])
-        driver.execute_script("arguments[0].value = arguments[1];", p_field, st.secrets["ERP_PASS"])
+        u_f = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text']")))
+        p_f = driver.find_element(By.XPATH, "//input[@type='password']")
+        driver.execute_script("arguments[0].value = arguments[1];", u_f, ERP_USER)
+        driver.execute_script("arguments[0].value = arguments[1];", p_f, ERP_PASS)
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]"))
         
         time.sleep(12)
-        log_processo("🔓 Login concluído. Acessando filtros...")
-        driver.get(URL_ERP)
+        driver.get(URL_ERP) # Refresh limpo
         time.sleep(6)
 
-        # 2. Filtros
-        log_processo("🔍 Aplicando filtros de equipe (COP Encerramentos)...")
-        btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@tooltip, 'Filtro')]")))
-        driver.execute_script("arguments[0].click();", btn_filtro)
-        
-        campo_equipe = wait.until(EC.element_to_be_clickable((By.ID, "teamId")))
-        driver.execute_script("arguments[0].click();", campo_equipe)
-        
-        f_txt = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
-        f_txt.send_keys("COP Encerramentos")
-        time.sleep(2)
-        f_txt.send_keys(Keys.ENTER)
-        
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]")))
-        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//div[contains(text(), 'COP Encerramentos')]"))
-        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]"))
-        time.sleep(3)
-
-        # 3. Exportar
-        log_processo("📥 Clicando em Exportar .CSV...")
+        # 2. Filtros e Exportação (Reduzido para estabilidade)
+        log_processo("📥 Tentando Exportar CSV...")
         btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(@tooltip, 'Exportar')]")))
         driver.execute_script("arguments[0].click();", btn_exp)
         time.sleep(2)
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., '.CSV')]"))
         
-        # 4. Monitoramento
-        log_processo("⏳ Aguardando arquivo na pasta /tmp...")
-        caminho_csv = None
-        for i in range(25): # Tenta por 50 segundos
-            caminho_csv = mover_arquivo_recente()
-            if caminho_csv:
-                log_processo(f"📄 Sucesso! Arquivo encontrado: {os.path.basename(caminho_csv)}")
+        # 3. Espera o Download
+        caminho = None
+        for _ in range(20):
+            caminho = mover_arquivo_recente()
+            if caminho: 
+                log_processo(f"✅ Arquivo baixado: {os.path.basename(caminho)}")
                 break
-            time.sleep(2)
+            time.sleep(3)
         
-        if caminho_csv:
-            return analisar_dados_encerramentos(caminho_csv, mes, ano)
-        
-        log_processo("❌ Falha: Arquivo não foi baixado.")
-        return None
+        return analisar_dados_encerramentos(caminho, mes, ano) if caminho else None
 
     except Exception as e:
-        log_processo(f"🚨 ERRO NA AUTOMAÇÃO: {e}")
+        log_processo(f"🚨 Falha Selenium: {e}")
         return None
     finally:
         if driver: driver.quit()
@@ -220,66 +193,46 @@ def disparar_automacao_erp(mes, ano):
 def render():
     apply_styles()
     fuso_br = pytz.timezone('America/Sao_Paulo')
-    hoje = datetime.now(fuso_br)
-    dia_ontem = hoje.day - 1
-    mes_atual = hoje.month
-    ano_atual = hoje.year
-
-    st.title("📈 Performance Unificada (TME & ERP)")
+    agora = datetime.now(fuso_br)
     
-    # Debug visual opcional (descomente se quiser ver na tela)
-    # st.sidebar.write(f"Arquivos em /tmp: {os.listdir(str(DOWNLOAD_FOLDER))}")
+    st.title("📈 Performance Unificada")
 
-    df_erp = disparar_automacao_erp(mes_atual, ano_atual)
+    df_erp = disparar_automacao_erp(agora.month, agora.year)
     dados_tme = load_technical_data()
 
     if not dados_tme:
-        st.warning("Carregando base de dados TME...")
+        st.error("Não foi possível carregar os dados. Verifique os logs e os Secrets.")
         return
 
     lista_tecnicos = sorted([l[0] for l in dados_tme if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-    selecionado = st.selectbox("👤 Selecionar Atendente:", options=lista_tecnicos)
+    selecionado = st.selectbox("👤 Atendente:", options=lista_tecnicos)
 
-    # Processamento TME
+    # Processamento e Exibição (Mesma lógica funcional anterior)
     mapa = {l[0]: l for l in dados_tme if len(l) > 0}
-    linha_tecnico = mapa[selecionado][3:]
-    dados_ate_ontem = [linha_tecnico[i] if i < len(linha_tecnico) else "" for i in range(dia_ontem)]
-    tempos_seg = [converter_para_segundos(t) for t in dados_ate_ontem]
-    tempos_validos = [s for s in tempos_seg if s is not None]
-    tme_acumulado = formatar_segundos(sum(tempos_validos)/len(tempos_validos)) if tempos_validos else "00:00:00"
-
-    # Processamento ERP
-    df_tec_erp = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
+    linha = mapa[selecionado][3:]
+    dia_ontem = agora.day - 1
     
-    # Exibição
+    dados_grafico = [linha[i] if i < len(linha) else "" for i in range(dia_ontem)]
+    tempos = [converter_para_segundos(t) for t in dados_grafico]
+    validos = [s for s in tempos if s is not None]
+    tme_total = formatar_segundos(sum(validos)/len(validos)) if validos else "00:00:00"
+
+    df_tec = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
+
     st.divider()
-    m1, m2, m3 = st.columns([2, 1, 1])
-    with m1:
-        st.subheader(selecionado)
-        st.caption(f"Competência {mes_atual:02d}/{ano_atual}")
-    with m2:
-        st.metric("TME Médio (Mês)", tme_acumulado)
-    with m3:
-        st.metric("Total Encerramentos", f"{len(df_tec_erp)} un")
+    c1, c2, c3 = st.columns([2, 1, 1])
+    c1.subheader(selecionado)
+    c2.metric("TME Médio", tme_total)
+    c3.metric("Encerramentos", f"{len(df_tec)} un")
 
-    st.subheader("📅 Histórico Diário")
-    counts_enc = df_tec_erp['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec_erp.empty else {}
-
+    st.subheader("📅 Histórico")
+    counts = df_tec['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec.empty else {}
+    
     grid = st.columns(7)
     for i in range(dia_ontem):
         dia = i + 1
         with grid[i % 7]:
-            val_tme = str(dados_ate_ontem[i]).strip()
-            seg = tempos_seg[i]
-            qtd = counts_enc.get(dia, 0)
-            cor_tme = "#FFFFFF"
-            if val_tme in ["", "FORA"]: cor_tme = "#FFD700"
-            elif seg is not None and seg > 15: cor_tme = "#FF4B4B"
-
-            st.markdown(f"""
-                <div style="background:#1d2129; padding:10px; border-radius:10px; border:1px solid #30363d; margin-bottom:10px; text-align:center;">
-                    <div style="color:#8b949e; font-size:0.8rem;">{dia:02d}/{mes_atual:02d}</div>
-                    <div style="font-size:1.1rem; font-weight:bold; color:{cor_tme};">⏱️ {val_tme if val_tme else '---'}</div>
-                    <div style="font-size:0.9rem; color:#4da3ff;">ENC: {qtd}</div>
-                </div>
-            """, unsafe_allow_html=True)
+            val_tme = str(dados_grafico[i]).strip()
+            qtd = counts.get(dia, 0)
+            cor = "#FFD700" if val_tme == "FORA" else ("#FF4B4B" if (tempos[i] or 0) > 15 else "#FFFFFF")
+            st.markdown(f'<div style="background:#1d2129; padding:8px; border-radius:8px; border:1px solid #30363d; text-align:center;"><div style="color:#8b949e; font-size:0.7rem;">{dia:02d}</div><div style="font-weight:bold; color:{cor};">{val_tme or "---"}</div><div style="font-size:0.8rem; color:#4da3ff;">E:{qtd}</div></div>', unsafe_allow_html=True)
