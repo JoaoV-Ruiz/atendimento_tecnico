@@ -221,7 +221,7 @@ def disparar_automacao_erp():
         driver.quit()
 
 # --- INTERFACE PRINCIPAL ---
-def main():
+def render():
     st_autorefresh(interval=10 * 60 * 1000, key="refresh_global")
     
     dados_tme_brutos = load_technical_data()
