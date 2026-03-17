@@ -62,7 +62,7 @@ if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
 st.sidebar.title("🚀 Menu Principal")
 escolha = st.sidebar.radio(
     "Selecione a ferramenta:", 
-    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa"]
+    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME"]
 )
 
 st.sidebar.divider()
@@ -76,3 +76,5 @@ elif escolha == "📲 Portabilidade":
     portabilidade.render()
 elif escolha == "💰 Batida de Caixa":
     batida_caixa.render()
+elif escolha == "📈 Performance TME":
+    performance.render()
