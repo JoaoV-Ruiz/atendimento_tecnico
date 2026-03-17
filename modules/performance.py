@@ -23,23 +23,34 @@ from oauth2client.service_account import ServiceAccountCredentials
 from styles import apply_styles
 
 def render():
-    # 1. Configurações Iniciais e Estilo
+    # 1. Configurações de Segurança e Estilo
     apply_styles()
     st_autorefresh(interval=10 * 60 * 1000, key="refresh_performance")
     
+    # 2. Puxar Segredos com proteção (dentro do render)
+    try:
+        ERP_USER = st.secrets["ERP_USER"]
+        ERP_PASS = st.secrets["ERP_PASS"]
+        # Se estas chaves não existirem, o erro será capturado aqui sem derrubar o main.py
+        NOME_DOWNLOAD = st.secrets.get("DOWNLOAD_PATH", "downloads").strip("/")
+        NOME_DESTINO = st.secrets.get("DESTINO_PATH", "destino").strip("/")
+    except KeyError as e:
+        st.error(f"❌ Erro: A chave {e} não foi encontrada nos Secrets do Streamlit.")
+        return
+
     fuso_br = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso_br)
     dia_ontem = agora.day - 1
     mes_atual_num = agora.month
     ano_atual_num = agora.year
 
-    # --- CONFIGURAÇÃO DE SEGREDOS E CAMINHOS ---
-    ERP_USER = st.secrets["ERP_USER"]
-    ERP_PASS = st.secrets["ERP_PASS"]
+    # Configuração de Pastas
     BASE_DIR = Path(__file__).parent.parent
-    NOME_DOWNLOAD = st.secrets["DOWNLOAD_PATH"].strip("/")
     DOWNLOAD_FOLDER = BASE_DIR / NOME_DOWNLOAD
+    DESTINO_FOLDER = BASE_DIR / NOME_DESTINO
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+    DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
+
     URL_ERP = "https://erp.osirnet.com.br/all_solicitations#/"
 
     MAPEAMENTO_TECNICOS = {
@@ -84,7 +95,7 @@ def render():
 
     def mover_arquivo_recente():
         path_str = str(DOWNLOAD_FOLDER.absolute())
-        time.sleep(5) # Espera o download estabilizar
+        time.sleep(5)
         arquivos = glob.glob(os.path.join(path_str, "*"))
         if not arquivos: return None
         return max(arquivos, key=os.path.getmtime)
@@ -92,7 +103,9 @@ def render():
     @st.cache_data(ttl=600)
     def load_technical_data():
         try:
-            creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS_2"])
+            # Tente usar a credencial 2 ou a padrão
+            creds_data = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
+            creds_info = json.loads(creds_data)
             scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             client = gspread.authorize(creds)
@@ -100,7 +113,7 @@ def render():
             sheet = spreadsheet.worksheet("AtendimentoTécnico")
             return sheet.get("A8:AF20")
         except Exception as e:
-            st.error(f"Erro Planilha: {e}")
+            st.error(f"Erro Planilha TME: {e}")
             return None
 
     def analisar_dados_encerramentos(caminho_csv):
@@ -141,35 +154,45 @@ def render():
         try:
             driver = webdriver.Chrome(options=chrome_options)
             driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
-            wait = WebDriverWait(driver, 35)
+            wait = WebDriverWait(driver, 40)
 
-            # Lógica de Login e Exportação idêntica ao Encerramentos.py
+            # Login
             driver.get(URL_ERP)
             time.sleep(5)
             try:
-                user_f = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
-                pass_f = driver.find_element(By.ID, ":r1:")
-                # Injeção via JS para evitar erros do React
+                # Localização por Xpath para ser mais estável que ID dinâmico
+                user_f = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text']")))
+                pass_f = driver.find_element(By.XPATH, "//input[@type='password']")
+                
                 driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", user_f, ERP_USER)
                 driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", pass_f, ERP_PASS)
-                driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
-                time.sleep(10)
+                
+                btn_entrar = driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
+                driver.execute_script("arguments[0].click();", btn_entrar)
+                time.sleep(12)
             except: pass
 
             driver.get(URL_ERP)
             time.sleep(5)
             wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-            time.sleep(2)
+            time.sleep(3)
             
-            # (Filtros e Exportação conforme Encerramentos.py)
-            # ... (seu código de filtros ERP) ...
-            
-            # Exportar CSV
+            # Filtro Equipe
+            driver.find_element(By.ID, "teamId").click()
+            f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+            f_all.send_keys("COP Encerramentos")
+            f_all.send_keys(Keys.ENTER)
+            time.sleep(3)
+            wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]"))).click()
+            driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+            time.sleep(5)
+
+            # Exportar
             btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
             driver.execute_script("arguments[0].click();", btn_exp)
             time.sleep(2)
             driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
-            time.sleep(30)
+            time.sleep(35)
             
             caminho = mover_arquivo_recente()
             return analisar_dados_encerramentos(caminho)
@@ -177,15 +200,16 @@ def render():
         finally:
             if driver: driver.quit()
 
-    # --- RENDERIZAÇÃO DA INTERFACE (MANTENDO SEU ESTILO ORIGINAL) ---
+    # --- INTERFACE ---
     st.title("📈 Performance Unificada")
     
+    # 1. Carregamento de dados
     dados_tme_brutos = load_technical_data()
     df_erp = disparar_automacao_erp()
 
     if dados_tme_brutos:
         lista_nomes = sorted([l[0] for l in dados_tme_brutos if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-        selecionado = st.selectbox("👤 Selecione o Atendente", options=lista_nomes)
+        selecionado = st.selectbox("👤 Selecionar o Atendente", options=lista_nomes)
 
         # Processamento TME
         mapa = {l[0]: l for l in dados_tme_brutos if len(l) > 0}
@@ -198,13 +222,13 @@ def render():
         # Processamento ERP
         df_tec_erp = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
         
-        # Métricas no Estilo do Sistema
+        # Métricas
         st.divider()
         m1, m2, m3 = st.columns(3)
         m1.metric("TME Acumulado", tme_acumulado)
         m2.metric("Total Encerramentos", f"{len(df_tec_erp)} un")
         
-        # Grid de quadradinhos diários
+        # Grid Diário
         st.subheader("📅 Histórico Diário")
         counts_enc = df_tec_erp['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec_erp.empty else {}
         
