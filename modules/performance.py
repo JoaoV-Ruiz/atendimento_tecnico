@@ -20,6 +20,7 @@ from selenium.webdriver.common.keys import Keys
 from streamlit_autorefresh import st_autorefresh
 from pathlib import Path
 from styles import apply_styles
+from oauth2client.service_account import ServiceAccountCredentials
 
 # --- CONFIGURAÇÕES DE CAMINHOS (Adaptado para Nuvem/Local) ---
 # No Streamlit Cloud, o caminho de download padrão costuma ser /tmp
