@@ -73,7 +73,7 @@ def load_technical_data():
         scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
         client = gspread.authorize(creds)
-        spreadsheet = client.open_by_url(st.secrets["SPREADSHEET_URL"])
+        spreadsheet = client.open_by_url(st.secrets["URL_PLANILHA"])
         sheet = spreadsheet.worksheet("AtendimentoTécnico")
         return sheet.get("A8:AF20")
     except Exception as e:
