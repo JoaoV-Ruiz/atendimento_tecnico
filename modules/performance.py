@@ -247,6 +247,39 @@ def render():
     # --- MÉTRICAS ---
     st.divider()
     col_n, col_m1, col_m2 = st.columns([2, 1, 1])
+    # --- 4. BARRAS DE PROGRESSO (METAS) ---
+    st.write("") # Espaçamento
+    total_atual = len(df_tec_erp)
+    meta_normal = 550
+    super_meta = 681
+
+    # Cálculos de Porcentagem (limitados a 100% para a barra não quebrar)
+    perc_normal = min(total_atual / meta_normal, 1.0)
+    perc_super = min(total_atual / super_meta, 1.0)
+
+    col_meta1, col_meta2 = st.columns(2)
+
+    with col_meta1:
+        st.markdown(f"**🎯 Meta Normal ({meta_normal} un)**")
+        st.progress(perc_normal)
+        if total_atual >= meta_normal:
+            st.success(f"✅ Meta Batida! ({total_atual})")
+        else:
+            faltam_normal = meta_normal - total_atual
+            st.caption(f"Faltam **{faltam_normal}** para atingir a meta.")
+
+    with col_meta2:
+        st.markdown(f"**🚀 Super Meta ({super_meta} un)**")
+        # Cor azulada para destacar a super meta
+        st.progress(perc_super)
+        if total_atual >= super_meta:
+            st.balloons() # Efeito de festa se bater a super meta!
+            st.success(f"🏆 SUPER META BATIDA! ({total_atual})")
+        else:
+            faltam_super = super_meta - total_atual
+            st.caption(f"Faltam **{faltam_super}** para a glória!")
+    
+    st.write("") # Mais um respiro
     with col_n:
         st.markdown(f"<h2 style='margin:0;'>{selecionado}</h2>", unsafe_allow_html=True)
         st.caption(f"Performance referente ao mês {mes_atual:02d}/{ano_atual}")
