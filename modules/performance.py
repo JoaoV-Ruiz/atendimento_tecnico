@@ -21,8 +21,8 @@ from styles import apply_styles
 from oauth2client.service_account import ServiceAccountCredentials
 
 # --- 1. CONFIGURAÇÃO DE CAMINHOS ---
-# Usar /tmp é a única garantia de escrita no Streamlit Cloud
-DOWNLOAD_FOLDER = Path("/tmp/downloads")
+# Usamos /tmp para garantir permissão de escrita no Streamlit Cloud
+DOWNLOAD_FOLDER = Path("/tmp/performance_downloads")
 DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
 
 URL_ERP = "https://erp.osirnet.com.br/all_solicitations#/"
@@ -43,12 +43,28 @@ MAPEAMENTO_TECNICOS = {
     "Vinicius Maciel Coppa": "VINICIUS COPPA"
 }
 
-# --- FUNÇÕES DE AUXÍLIO ---
+# --- FUNÇÕES DE AUXÍLIO E LOG ---
+
+def log_processo(mensagem):
+    """Imprime no console do Streamlit Cloud (Manage App > Logs)"""
+    agora = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime('%H:%M:%S')
+    print(f"[ROBÔ ERP {agora}] {mensagem}")
+
+def limpar_pasta_downloads():
+    """Remove arquivos antigos para não processar CSV errado"""
+    arquivos = glob.glob(os.path.join(str(DOWNLOAD_FOLDER), "*"))
+    for f in arquivos:
+        try: os.remove(f)
+        except: pass
+    log_processo("🧹 Pasta temporária limpa.")
 
 def mover_arquivo_recente():
-    time.sleep(3)
+    """Busca o arquivo CSV recém baixado"""
+    time.sleep(4)
     arquivos = list(DOWNLOAD_FOLDER.glob("*.csv"))
-    if not arquivos: return None
+    if not arquivos: 
+        return None
+    # Pega o arquivo com a data de modificação mais recente
     arquivo_recente = max(arquivos, key=os.path.getmtime)
     return str(arquivo_recente)
 
@@ -75,7 +91,9 @@ def converter_para_segundos(tempo_str):
 def formatar_segundos(segundos):
     return str(timedelta(seconds=int(segundos)))
 
-@st.cache_data(ttl=3600) # Aumentado para 1 hora para evitar disparos excessivos
+# --- COLETA DE DADOS ---
+
+@st.cache_data(ttl=600)
 def load_technical_data():
     try:
         creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS_2"])
@@ -86,7 +104,7 @@ def load_technical_data():
         sheet = spreadsheet.worksheet("AtendimentoTécnico")
         return sheet.get("A8:AF20")
     except Exception as e:
-        st.error(f"Erro Planilha: {e}")
+        log_processo(f"🚨 Erro Planilha: {e}")
         return None
 
 def analisar_dados_encerramentos(caminho_csv, mes, ano):
@@ -110,31 +128,35 @@ def analisar_dados_encerramentos(caminho_csv, mes, ano):
         df = df.dropna(subset=['Atendente_Planilha', 'DATA_REF'])
         return df[(df['DATA_REF'].dt.month == mes) & (df['DATA_REF'].dt.year == ano)]
     except Exception as e:
-        st.error(f"Erro ao processar CSV do ERP: {e}")
+        log_processo(f"🚨 Erro Processamento CSV: {e}")
         return None
 
-@st.cache_data(ttl=1800, show_spinner="🤖 Robô acessando ERP... aguarde.")
+@st.cache_data(ttl=1800, show_spinner="🤖 Robô sincronizando ERP... acompanhe nos logs.")
 def disparar_automacao_erp(mes, ano):
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1920,1080")
+    limpar_pasta_downloads()
+    
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1920,1080")
 
-    abs_download_path = str(DOWNLOAD_FOLDER.absolute())
-    prefs = {"download.default_directory": abs_download_path}
-    chrome_options.add_experimental_option("prefs", prefs)
+    prefs = {"download.default_directory": str(DOWNLOAD_FOLDER.absolute())}
+    options.add_experimental_option("prefs", prefs)
 
     driver = None
     try:
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
+        log_processo("🌐 Abrindo Chrome Headless...")
+        driver = webdriver.Chrome(options=options)
+        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": str(DOWNLOAD_FOLDER.absolute())})
         wait = WebDriverWait(driver, 60)
 
         # 1. Login
+        log_processo(f"🔗 Acessando {URL_ERP}")
         driver.get(URL_ERP)
-        time.sleep(5)
+        time.sleep(6)
         
+        log_processo("🔑 Realizando Login...")
         u_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text']")))
         p_field = driver.find_element(By.XPATH, "//input[@type='password']")
         
@@ -143,49 +165,58 @@ def disparar_automacao_erp(mes, ano):
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]"))
         
         time.sleep(12)
-        driver.get(URL_ERP) # Redirecionamento limpo
-        time.sleep(5)
+        log_processo("🔓 Login concluído. Acessando filtros...")
+        driver.get(URL_ERP)
+        time.sleep(6)
 
-        # 3. Filtros
+        # 2. Filtros
+        log_processo("🔍 Aplicando filtros de equipe (COP Encerramentos)...")
         btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@tooltip, 'Filtro')]")))
         driver.execute_script("arguments[0].click();", btn_filtro)
         
         campo_equipe = wait.until(EC.element_to_be_clickable((By.ID, "teamId")))
         driver.execute_script("arguments[0].click();", campo_equipe)
         
-        filtro_txt = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
-        filtro_txt.send_keys("COP Encerramentos")
+        f_txt = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+        f_txt.send_keys("COP Encerramentos")
         time.sleep(2)
-        filtro_txt.send_keys(Keys.ENTER)
+        f_txt.send_keys(Keys.ENTER)
         
-        item_lista = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]")))
-        driver.execute_script("arguments[0].click();", item_lista)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]")))
+        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//div[contains(text(), 'COP Encerramentos')]"))
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]"))
-        time.sleep(2)
+        time.sleep(3)
 
-        # Exportar
+        # 3. Exportar
+        log_processo("📥 Clicando em Exportar .CSV...")
         btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(@tooltip, 'Exportar')]")))
         driver.execute_script("arguments[0].click();", btn_exp)
         time.sleep(2)
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., '.CSV')]"))
         
-        # Monitor de Download
-        start_time = time.time()
-        caminho_final = None
-        while time.time() - start_time < 45:
-            caminho_final = mover_arquivo_recente()
-            if caminho_final: break
+        # 4. Monitoramento
+        log_processo("⏳ Aguardando arquivo na pasta /tmp...")
+        caminho_csv = None
+        for i in range(25): # Tenta por 50 segundos
+            caminho_csv = mover_arquivo_recente()
+            if caminho_csv:
+                log_processo(f"📄 Sucesso! Arquivo encontrado: {os.path.basename(caminho_csv)}")
+                break
             time.sleep(2)
         
-        return analisar_dados_encerramentos(caminho_final, mes, ano)
+        if caminho_csv:
+            return analisar_dados_encerramentos(caminho_csv, mes, ano)
+        
+        log_processo("❌ Falha: Arquivo não foi baixado.")
+        return None
 
     except Exception as e:
-        print(f"Erro Automação: {e}")
+        log_processo(f"🚨 ERRO NA AUTOMAÇÃO: {e}")
         return None
     finally:
         if driver: driver.quit()
 
-# --- INTERFACE PRINCIPAL ---
+# --- INTERFACE ---
 def render():
     apply_styles()
     fuso_br = pytz.timezone('America/Sao_Paulo')
@@ -196,34 +227,31 @@ def render():
 
     st.title("📈 Performance Unificada (TME & ERP)")
     
-    # Executa a automação apenas se necessário (Cache cuida disso)
+    # Debug visual opcional (descomente se quiser ver na tela)
+    # st.sidebar.write(f"Arquivos em /tmp: {os.listdir(str(DOWNLOAD_FOLDER))}")
+
     df_erp = disparar_automacao_erp(mes_atual, ano_atual)
     dados_tme = load_technical_data()
 
     if not dados_tme:
-        st.warning("Aguardando dados da planilha TME...")
+        st.warning("Carregando base de dados TME...")
         return
 
     lista_tecnicos = sorted([l[0] for l in dados_tme if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
     selecionado = st.selectbox("👤 Selecionar Atendente:", options=lista_tecnicos)
 
-    # Lógica de exibição
+    # Processamento TME
     mapa = {l[0]: l for l in dados_tme if len(l) > 0}
     linha_tecnico = mapa[selecionado][3:]
-    
     dados_ate_ontem = [linha_tecnico[i] if i < len(linha_tecnico) else "" for i in range(dia_ontem)]
     tempos_seg = [converter_para_segundos(t) for t in dados_ate_ontem]
     tempos_validos = [s for s in tempos_seg if s is not None]
-    
     tme_acumulado = formatar_segundos(sum(tempos_validos)/len(tempos_validos)) if tempos_validos else "00:00:00"
 
-    # Segurança para o DataFrame
-    if df_erp is not None:
-        df_tec_erp = df_erp[df_erp['Atendente_Planilha'] == selecionado]
-    else:
-        df_tec_erp = pd.DataFrame()
+    # Processamento ERP
+    df_tec_erp = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
     
-    # Métricas
+    # Exibição
     st.divider()
     m1, m2, m3 = st.columns([2, 1, 1])
     with m1:
@@ -234,7 +262,6 @@ def render():
     with m3:
         st.metric("Total Encerramentos", f"{len(df_tec_erp)} un")
 
-    # Grid Diário
     st.subheader("📅 Histórico Diário")
     counts_enc = df_tec_erp['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec_erp.empty else {}
 
