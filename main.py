@@ -35,8 +35,8 @@ agora = datetime.now(fuso_br)
 
 # --- 3. GATILHO AUTOMÁTICO ---
 # AJUSTE AQUI PARA O TESTE (Ex: se agora é 13:14, coloque 13 e 15)
-HORA_ALVO = 23
-MIN_ALVO = 45
+HORA_ALVO = 15
+MIN_ALVO = 20
 
 if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
     if st.session_state.dia_disparo != agora.day:
