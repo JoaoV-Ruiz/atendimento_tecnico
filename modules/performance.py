@@ -132,55 +132,103 @@ def disparar_automacao_erp(mes, ano):
     chrome_options.add_argument("--window-size=1920,1080")
 
     abs_download_path = str(DOWNLOAD_FOLDER.absolute())
-    prefs = {"download.default_directory": abs_download_path, "download.prompt_for_download": False}
+    prefs = {"download.default_directory": abs_download_path}
     chrome_options.add_experimental_option("prefs", prefs)
 
     driver = None
     try:
         driver = webdriver.Chrome(options=chrome_options)
         driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
-        wait = WebDriverWait(driver, 35)
+        wait = WebDriverWait(driver, 40)
 
-        def forcar_input_react(elemento, valor):
-            script = "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));"
-            driver.execute_script(script, elemento, valor)
-
-        # 1. Login
+        # 1. LOGIN (Usando atributos mais estáveis que o ID :r0:)
         driver.get(URL_ERP)
         time.sleep(5)
+        
         try:
-            c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
-            c_pass = driver.find_element(By.ID, ":r1:")
-            forcar_input_react(c_user, ERP_USER)
-            forcar_input_react(c_pass, ERP_PASS) 
-            driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
+            # Busca pelo atributo 'name' ou 'type' em vez do ID dinâmico
+            user_field = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@type='text']")))
+            pass_field = driver.find_element(By.XPATH, "//input[@type='password']")
+            
+            driver.execute_script("arguments[0].value = arguments[1];", user_field, ERP_USER)
+            driver.execute_script("arguments[0].value = arguments[1];", pass_field, ERP_PASS)
+            
+            # Clique no botão de entrar via JavaScript para evitar 'InterceptedError'
+            btn_login = driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
+            driver.execute_script("arguments[0].click();", btn_login)
             time.sleep(10)
+        except:
+            pass # Pode já estar logado
+
+        # 2. FILTROS (Navegação direta para limpar a tela)
+        driver.get(URL_ERP)
+        time.sleep(7)
+
+        # Abrir Filtro Avançado
+        btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']")))
+        driver.execute_script("arguments[0].click();", btn_filtro)
+        time.sleep(3)
+
+        # Selecionar Equipe (Usando a lógica de busca por texto)
+        try:
+            input_equipe = driver.find_element(By.ID, "teamId")
+            driver.execute_script("arguments[0].click();", input_equipe)
+            time.sleep(1)
+            
+            filter_input = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+            filter_input.send_keys("COP Encerramentos")
+            time.sleep(2)
+            filter_input.send_keys(Keys.ENTER)
+            
+            # Clique no resultado da lista
+            opcao = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]")))
+            driver.execute_script("arguments[0].click();", opcao)
+            
+            btn_confirmar = driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]")
+            driver.execute_script("arguments[0].click();", btn_confirmar)
+            time.sleep(2)
+        except Exception as e:
+            print(f"Erro nos filtros de equipe: {e}")
+
+        # 3. DATAS (Limpeza e preenchimento via JS)
+        hj = datetime.now()
+        ultimo_dia = calendar.monthrange(hj.year, hj.month)[1]
+        data_fim = f"{ultimo_dia:02d}/{hj.month:02d}/{hj.year}"
+
+        # Preenche a data de fechamento final
+        try:
+            campo_data = driver.find_element(By.ID, "finalReportClosingDate")
+            driver.execute_script("arguments[0].value = arguments[1];", campo_data, data_fim)
+            driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", campo_data)
+            
+            btn_aplicar = driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]")
+            driver.execute_script("arguments[0].click();", btn_aplicar)
+            time.sleep(10) # Tempo para o ERP processar a busca
         except: pass
 
-        # 2. Filtros e Exportação
-        driver.get(URL_ERP)
-        time.sleep(5)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-        time.sleep(2)
-        
-        # (Lógica de filtros aqui conforme seu código...)
-        # ... 
-        
-        # 4. Exportação
-        btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
-        driver.execute_script("arguments[0].click();", btn_exp)
-        time.sleep(2)
-        driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
-        
-        time.sleep(25) 
-        caminho = mover_arquivo_recente()
-        
-        if caminho:
-            df_final = analisar_dados_encerramentos(caminho, mes, ano)
-            return df_final
+        # 4. EXPORTAÇÃO (O ponto onde estava dando erro)
+        try:
+            # Localiza o botão de exportar (pode ser pelo tooltip ou pelo ícone)
+            btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(@tooltip, 'Exportar')]")))
+            driver.execute_script("arguments[0].click();", btn_exp)
+            time.sleep(2)
+            
+            btn_csv = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]")))
+            driver.execute_script("arguments[0].click();", btn_csv)
+            
+            # Espera o download (Monitorando a pasta)
+            time.sleep(20)
+            caminho = mover_arquivo_recente()
+            
+            if caminho:
+                return analisar_dados_encerramentos(caminho, mes, ano)
+        except Exception as e:
+            st.error(f"Erro na fase de exportação: {e}")
+            
         return None
+
     except Exception as e:
-        st.error(f"Erro Automação: {e}")
+        st.error(f"Erro Automação ERP: {e}")
         return None
     finally:
         if driver: driver.quit()
