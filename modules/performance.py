@@ -122,8 +122,7 @@ def analisar_dados_encerramentos(caminho_csv, mes, ano):
 
 @st.cache_data(ttl=900, show_spinner="Sincronizando Performance ERP...")
 def disparar_automacao_erp(mes, ano):
-    options = Options()
-    chrome_options = Options()
+        chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
