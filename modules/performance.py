@@ -83,7 +83,7 @@ def formatar_segundos(segundos):
 def load_technical_data():
     # No Streamlit Cloud, use st.secrets em vez de .env
     url = st.secrets.get("URL_PLANILHA")
-    creds_json_str = st.secrets.get("GOOGLE_CREDENTIALS_JSON")
+    creds_json_str = st.secrets.get("GOOGLE_CREDENTIALS_JSON_2")
     
     if not url or not creds_json_str:
         st.error("Credenciais não encontradas nos Secrets.")
