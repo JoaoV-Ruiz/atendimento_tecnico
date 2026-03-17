@@ -69,7 +69,7 @@ def formatar_segundos(segundos):
 @st.cache_data(ttl=600)
 def load_technical_data():
     try:
-        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
+        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS_2"])
         scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
         client = gspread.authorize(creds)
