@@ -107,62 +107,113 @@ def analisar_dados_encerramentos(caminho_csv, mes, ano):
 
 @st.cache_data(ttl=900, show_spinner="Sincronizando Performance ERP...")
 def disparar_automacao_erp(mes, ano):
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    
-    prefs = {"download.default_directory": str(DOWNLOAD_FOLDER.absolute())}
-    options.add_experimental_option("prefs", prefs)
-    
-    driver = webdriver.Chrome(options=options)
-    try:
-        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": str(DOWNLOAD_FOLDER.absolute())})
-        wait = WebDriverWait(driver, 45)
-        
-        # Login (Usando Secrets)
-        driver.get("https://erp.osirnet.com.br/all_solicitations#/")
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+
+        abs_download_path = str(DOWNLOAD_FOLDER.absolute())
+        prefs = {
+            "download.default_directory": abs_download_path,
+            "download.prompt_for_download": False,
+            "directory_upgrade": True,
+            "safebrowsing.enabled": True
+        }
+        chrome_options.add_experimental_option("prefs", prefs)
+
+        driver = None
         try:
-            user_field = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
-            user_field.send_keys(st.secrets["ERP_USER"])
-            driver.find_element(By.ID, ":r1:").send_keys(st.secrets["ERP_PASS"])
-            driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
+            driver = webdriver.Chrome(options=chrome_options)
+            
+            # Comando CRÍTICO para habilitar downloads no modo Headless do Linux
+            driver.execute_cdp_cmd("Page.setDownloadBehavior", {
+                "behavior": "allow",
+                "downloadPath": abs_download_path
+            })
+
+            wait = WebDriverWait(driver, 35)
+            
+            def forcar_input_react(elemento, valor):
+                script = """
+                var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
+                element.value = value; var event = new Event('input', { bubbles: true });
+                var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); }
+                element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
+                """
+                driver.execute_script(script, elemento, valor)
+
+            # 1. Login
+            driver.get(URL_ERP)
             time.sleep(5)
-        except: pass
+            try:
+                c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
+                c_pass = driver.find_element(By.ID, ":r1:")
+                forcar_input_react(c_user, ERP_USER)
+                forcar_input_react(c_pass, ERP_PASS) 
+                driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
+                time.sleep(10)
+            except: pass
 
-        # Navegação e Filtros (Resumido para o módulo)
-        driver.get("https://erp.osirnet.com.br/all_solicitations#/")
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-        time.sleep(2)
+            # 2. Tela Antiga
+            try:
+                btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
+                driver.execute_script("arguments[0].click();", btn_ant)
+                time.sleep(6)
+            except: pass
 
-        # Seleção de Equipe
-        driver.find_element(By.ID, "teamId").click()
-        f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
-        f_all.send_keys("COP Encerramentos")
-        f_all.send_keys(Keys.ENTER)
-        time.sleep(2)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
-        driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+            # 3. Filtros
+            try:
+                driver.get(URL_ERP)
+                time.sleep(5)
+                wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
+                time.sleep(3)
 
-        # Exportação CSV
-        btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
-        driver.execute_script("arguments[0].click();", btn_exp)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
-        
-        time.sleep(25) # Tempo de download
-        
-        arquivos = glob.glob(os.path.join(str(DOWNLOAD_FOLDER), "*"))
-        if not arquivos: return None
-        recente = max(arquivos, key=os.path.getmtime)
-        
-        return analisar_dados_encerramentos(recente, mes, ano)
-        
-    except Exception as e:
-        st.error(f"Erro na automação ERP: {str(e)}")
-        return None
-    finally:
-        driver.quit()
+                driver.find_element(By.ID, "teamId").click()
+                time.sleep(1)
+                f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+                f_all.send_keys("COP Encerramentos")
+                f_all.send_keys(Keys.ENTER)
+                time.sleep(3)
+                wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
+                time.sleep(1)
+                driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+
+                # Limpeza datas
+                driver.execute_script("""
+                    ['beginInitialDate', 'endInitialDate'].forEach(id => {
+                        var el = document.getElementById(id);
+                        if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
+                    });
+                """)
+
+                hj = datetime.now()
+                fim = hj.replace(day=calendar.monthrange(hj.year, hj.month)[1]).strftime("%d/%m/%Y")
+                forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), fim)
+                time.sleep(2)
+                driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
+                time.sleep(12)
+            except: pass
+
+            # 4. Exportação
+            try:
+                btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
+                driver.execute_script("arguments[0].click();", btn_exp)
+                time.sleep(2)
+                driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
+                
+                time.sleep(30) # Tempo maior para o servidor processar
+                caminho = mover_arquivo_recente()
+                
+                if caminho is None:
+                    return None
+                hora_br = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")
+                return {"dados": analisar_dados_encerramentos(caminho), "horario": hora_br}
+            except: return None
+                
+        finally:
+            if driver: driver.quit()
 
 # --- INTERFACE PRINCIPAL ---
 def render():
