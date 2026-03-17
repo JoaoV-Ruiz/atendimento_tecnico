@@ -127,13 +127,11 @@ def disparar_automacao_erp(mes, ano):
 
     driver = None
     try:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 Iniciando Selenium...")
         driver = webdriver.Chrome(options=chrome_options)
         driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
         wait = WebDriverWait(driver, 60)
 
-        # 1. LOGIN
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 🔑 Acessando página de login...")
+        # 1. Login
         driver.get(URL_ERP)
         time.sleep(5)
         
@@ -142,18 +140,13 @@ def disparar_automacao_erp(mes, ano):
         
         driver.execute_script("arguments[0].value = arguments[1];", u_field, st.secrets["ERP_USER"])
         driver.execute_script("arguments[0].value = arguments[1];", p_field, st.secrets["ERP_PASS"])
-        
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 📑 Inserindo credenciais...")
-        btn_login = driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
-        driver.execute_script("arguments[0].click();", btn_login)
+        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]"))
         
         time.sleep(12)
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Login realizado. Redirecionando...")
-        driver.get(URL_ERP)
+        driver.get(URL_ERP) # Redirecionamento limpo
         time.sleep(5)
 
-        # 3. FILTROS
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 🔍 Aplicando filtros de equipe...")
+        # 3. Filtros
         btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@tooltip, 'Filtro')]")))
         driver.execute_script("arguments[0].click();", btn_filtro)
         
@@ -168,42 +161,29 @@ def disparar_automacao_erp(mes, ano):
         item_lista = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'COP Encerramentos')]")))
         driver.execute_script("arguments[0].click();", item_lista)
         driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]"))
-        
-        # 4. EXPORTAR
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 📥 Solicitando exportação CSV...")
+        time.sleep(2)
+
+        # Exportar
         btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(@tooltip, 'Exportar')]")))
         driver.execute_script("arguments[0].click();", btn_exp)
         time.sleep(2)
+        driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., '.CSV')]"))
         
-        btn_csv = driver.find_element(By.XPATH, "//button[contains(., '.CSV')]")
-        driver.execute_script("arguments[0].click();", btn_csv)
-        
-        # 5. MONITOR DE DOWNLOAD
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ⏳ Aguardando download na pasta /tmp...")
+        # Monitor de Download
         start_time = time.time()
         caminho_final = None
-        while time.time() - start_time < 50:
+        while time.time() - start_time < 45:
             caminho_final = mover_arquivo_recente()
-            if caminho_final: 
-                print(f"[{datetime.now().strftime('%H:%M:%S')}] ✨ Arquivo detectado: {os.path.basename(caminho_final)}")
-                break
-            time.sleep(3)
+            if caminho_final: break
+            time.sleep(2)
         
-        if caminho_final:
-            df = analisar_dados_encerramentos(caminho_final, mes, ano)
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 📊 CSV processado com {len(df) if df is not None else 0} linhas.")
-            return df
-        
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Erro: Download não concluído.")
-        return None
+        return analisar_dados_encerramentos(caminho_final, mes, ano)
 
     except Exception as e:
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚨 ERRO CRÍTICO: {str(e)}")
+        print(f"Erro Automação: {e}")
         return None
     finally:
-        if driver: 
-            driver.quit()
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] 🏁 Navegador encerrado.")
+        if driver: driver.quit()
 
 # --- INTERFACE PRINCIPAL ---
 def render():
