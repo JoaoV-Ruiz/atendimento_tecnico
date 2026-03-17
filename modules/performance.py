@@ -22,10 +22,26 @@ from pathlib import Path
 from styles import apply_styles
 from oauth2client.service_account import ServiceAccountCredentials
 
-# --- CONFIGURAÇÕES DE CAMINHOS (Adaptado para Nuvem/Local) ---
-# No Streamlit Cloud, o caminho de download padrão costuma ser /tmp
-DOWNLOAD_FOLDER = Path("/tmp/downloads")
-DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+ # --- 1. CONFIGURAÇÃO DE SEGREDOS E CAMINHOS (PATHLIB) ---
+    ERP_USER = st.secrets["ERP_USER"]
+    ERP_PASS = st.secrets["ERP_PASS"]
+    
+    # Define a raiz do projeto (sobe dois níveis de modules/encerramentos.py)
+    BASE_DIR = Path(__file__).parent.parent
+
+    # Pega os nomes das pastas dos Secrets e garante que são objetos Path
+    NOME_DOWNLOAD = st.secrets["DOWNLOAD_PATH"].strip("/")
+    NOME_DESTINO = st.secrets["DESTINO_PATH"].strip("/")
+
+    DOWNLOAD_FOLDER = BASE_DIR / NOME_DOWNLOAD
+    DESTINO_FOLDER = BASE_DIR / NOME_DESTINO
+
+    # Cria as pastas no servidor
+    DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
+    DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
+
+    URL_ERP = "https://erp.osirnet.com.br/all_solicitations#/"
+
 
 MAPEAMENTO_TECNICOS = {
     "Alisson Do Couto Guerreiro": "ALISSON DO COUTO GUERREIRO",
