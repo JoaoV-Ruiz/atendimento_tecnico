@@ -25,7 +25,7 @@ from styles import apply_styles
 MAPEAMENTO_TECNICOS = {
     "Alisson Do Couto Guerreiro": "ALISSON DO COUTO GUERREIRO",
     "Caio Alves dos Reis": "CAIO REIS",
-    "Cristiano Weber Marques": "CRISTIANO WEBER MARQUES",
+    "Cristiano Weber Marques": "CRISTIANO MARQUES", # Reduzi o termo de busca para ser mais certeiro
     "Diogo Taborda de Bitencourt": "DIOGO TABORDA DE BITENCOURT",
     "Filipe Vieira Vaz": "FILIPE VIEIRA VAZ",
     "Igor Saldanha Noguez": "IGOR SALDANHA",
