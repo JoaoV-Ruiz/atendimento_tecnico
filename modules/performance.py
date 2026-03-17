@@ -222,78 +222,86 @@ def disparar_automacao_erp():
 
 # --- INTERFACE PRINCIPAL ---
 def render():
-    st_autorefresh(interval=10 * 60 * 1000, key="refresh_global")
+# --- INTERFACE (Substitua a partir daqui no seu render) ---
+    st.title("📈 Performance Unificada")
     
-    dados_tme_brutos = load_technical_data()
-    if not dados_tme_brutos:
-        st.warning("Aguardando base de dados da Planilha...")
-        return
-
-    lista_nomes_planilha = sorted([l[0] for l in dados_tme_brutos if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-    
-    st.markdown("### 👤 Selecione o Atendente")
-    selecionado = st.selectbox("Escolha um nome:", options=lista_nomes_planilha, label_visibility="collapsed")
-    
-    # Rodar automação
+    # Chama as funções de coleta (que já estão com cache)
     df_erp = disparar_automacao_erp()
+    dados_tme = load_technical_data()
 
-    # Tratamento TME
-    mapa = {l[0]: l for l in dados_tme_brutos if len(l) > 0}
-    linha_tecnico = mapa[selecionado]
-    dados_tecnico_raw = linha_tecnico[3:]
-    
-    # Segurança para IndexError: Preenche até o dia de ontem
-    dados_ate_ontem = [dados_tecnico_raw[i] if i < len(dados_tecnico_raw) else "" for i in range(DIA_ONTEM)]
-    tempos_seg = [converter_para_segundos(t) for t in dados_ate_ontem]
-    tempos_validos = [s for s in tempos_seg if s is not None]
-    
-    tme_acumulado = formatar_segundos(sum(tempos_validos)/len(tempos_validos)) if tempos_validos else "00:00:00"
+    if dados_tme:
+        # 1. Seletor de Atendente
+        lista_nomes = sorted([l[0] for l in dados_tme if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
+        selecionado = st.selectbox("👤 Selecionar o Atendente:", options=lista_nomes)
 
-    # Tratamento ERP
-    df_tec_erp = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
-    
-    # --- MÉTRICAS ---
-    st.divider()
-    col_n, col_m1, col_m2 = st.columns([2, 1, 1])
-    with col_n:
-        st.markdown(f"<h2 style='margin:0;'>{selecionado}</h2>", unsafe_allow_html=True)
-        st.caption(f"Performance referente ao mês {MES_ATUAL_NUM:02d}/{ANO_ATUAL_NUM}")
-    with col_m1:
-        st.metric("TME Acumulado", tme_acumulado)
-    with col_m2:
-        st.metric("Total Encerramentos", f"{len(df_tec_erp)} un")
+        # 2. Processamento dos dados para a interface
+        mapa = {l[0]: l for l in dados_tme if len(l) > 0}
+        linha = mapa[selecionado][3:]
+        
+        # Filtra os dados da planilha até ontem
+        grafico_raw = [linha[i] if i < len(linha) else "" for i in range(dia_ontem)]
+        tempos_seg = [converter_para_segundos(t) for t in grafico_raw]
+        validos = [s for s in tempos_seg if s is not None]
+        
+        # Cálculo do TME Médio
+        tme_media = formatar_segundos(sum(validos)/len(validos)) if validos else "00:00:00"
 
-    # --- HISTÓRICO DIÁRIO ---
-    st.subheader("📅 Histórico Diário")
-    grid = st.columns(7)
-    counts_enc = df_tec_erp['DATA_REF'].dt.day.value_counts() if not df_tec_erp.empty else {}
+        # Filtra os encerramentos do ERP para o técnico selecionado
+        df_tec = df_erp[df_erp['Atendente_Planilha'] == selecionado] if df_erp is not None else pd.DataFrame()
+        counts_enc = df_tec['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec.empty else {}
 
-    for i in range(DIA_ONTEM):
-        dia = i + 1
-        with grid[i % 7]:
-            val_tme = str(dados_ate_ontem[i]).strip()
-            seg = tempos_seg[i]
-            qtd = counts_enc.get(dia, 0)
-            
-            # REGRA: Maior que 15 segundos = Vermelho
-            is_fora = val_tme in ["", "FORA"]
-            if is_fora:
-                cor_tme = "#FFD700" # Amarelo para FORA
-                display_tme = "FORA"
-            elif seg is not None and seg > 15:
-                cor_tme = "#FF4B4B" # Vermelho para > 15s
-                display_tme = val_tme
-            else:
-                cor_tme = "#FFFFFF" # Branco para normal
-                display_tme = val_tme
+        # 3. Exibição das Métricas Principais
+        st.divider()
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            st.metric("TME Acumulado (Mês)", tme_media)
+        with col_m2:
+            st.metric("Total Encerramentos", f"{len(df_tec)} un")
 
-            st.markdown(f"""
-                <div class="dia-container">
-                    <div style="color:#8b949e; font-size:0.8rem; margin-bottom:5px;">{dia:02d}/{MES_ATUAL_NUM:02d}</div>
-                    <div style="font-size:1.1rem; font-weight:bold; color:{cor_tme};">⏱️ {display_tme}</div>
-                    <div style="font-size:1.1rem; font-weight:bold; color:#8b949e">ENC: {qtd}</div>
-                </div>
-            """, unsafe_allow_html=True)
+        # 4. GRID DIÁRIO (O Design Bonitinho)
+        st.subheader("📅 Histórico Diário")
+        
+        # Cria as colunas para o grid (7 dias por linha)
+        grid = st.columns(7)
+        
+        for i in range(dia_ontem):
+            dia = i + 1
+            with grid[i % 7]:
+                val_tme = str(grafico_raw[i]).strip()
+                seg = tempos_seg[i]
+                qtd = counts_enc.get(dia, 0)
+                
+                # Definição de Cores Condicionais
+                cor_tme = "#FFFFFF" # Branco padrão
+                if val_tme in ["", "FORA"]: 
+                    cor_tme = "#FFD700" # Amarelo para folga/fora
+                elif seg is not None and seg > 15: 
+                    cor_tme = "#FF4B4B" # Vermelho para alerta (>15s)
+
+                # Container HTML para o Card do Dia
+                st.markdown(f"""
+                    <div style="
+                        background: #1d2129; 
+                        padding: 12px; 
+                        border-radius: 10px; 
+                        border: 1px solid #30363d; 
+                        margin-bottom: 12px; 
+                        text-align: center;
+                        min-height: 100px;
+                    ">
+                        <div style="color: #8b949e; font-size: 0.85rem; font-weight: 500;">
+                            {dia:02d}/{mes_atual:02d}
+                        </div>
+                        <div style="font-size: 1.15rem; font-weight: bold; color: {cor_tme}; margin-top: 5px;">
+                            ⏱️ {val_tme if val_tme else '---'}
+                        </div>
+                        <div style="font-size: 0.95rem; font-weight: 600; color: #4da3ff; margin-top: 8px; border-top: 1px solid #30363d; padding-top: 5px;">
+                            ENC: {qtd}
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+    else:
+        st.info("💡 Aguardando conexão com a base de dados...")
 
 if __name__ == "__main__":
     main()
