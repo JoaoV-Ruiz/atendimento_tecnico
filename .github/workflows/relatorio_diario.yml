@@ -1,0 +1,41 @@
+name: Disparo Relatorio Automático
+
+on:
+  schedule:
+    # O horário no GitHub é em UTC (Londres). 
+    # Brasil (Brasília) é UTC-3. 
+    # Para rodar às 15:08 no Brasil, colocamos 18:08 UTC.
+    - cron: '8 18 * * *'
+  workflow_dispatch: # Permite que você rode manualmente pelo botão no GitHub para testar
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Instalar Google Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Instalar dependências
+        run: |
+          pip install pandas selenium gspread oauth2client pytz
+
+      - name: Executar script de envio
+        env:
+          # Aqui conectamos os Segredos do GitHub com o seu código
+          EMAIL_CORP: ${{ secrets.EMAIL_CORP }}
+          SENHA_SISTEMA: ${{ secrets.SENHA_SISTEMA }}
+          SENHA_ZULIP: ${{ secrets.SENHA_ZULIP }}
+          SPREADSHEET_URL: ${{ secrets.SPREADSHEET_URL }}
+          GOOGLE_JSON_CREDENTIALS: ${{ secrets.GOOGLE_JSON_CREDENTIALS }}
+        run: python bot_scheduler.py
