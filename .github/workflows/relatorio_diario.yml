@@ -1,9 +1,9 @@
-name: Disparo Relatorio Automático
+name: Teste Automático
 
 on:
   schedule:
     # 15:30 no Brasil (Brasília) = 18:30 UTC
-    - cron: '30 18 * * *'
+    - cron: '40 18 * * *'
   workflow_dispatch:
 
 jobs:
