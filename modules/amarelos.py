@@ -148,10 +148,11 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
         )
 
         # 5. Injeta a mensagem e dispara eventos para o sistema reconhecer o texto
-        textarea = wait.until(EC.presence_of_element_located((By.ID, "compose-textarea")))
+        textarea = wait.until(EC.element_to_be_clickable((By.ID, "compose-textarea")))
+        textarea.click() # Foca no campo
         driver.execute_script("arguments[0].value = arguments[1];", textarea, mensagem)
         driver.execute_script("arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", textarea)
-        time.sleep(2)
+        time.sleep(1)
         
         # 6. Envio Final
         btn_enviar = driver.find_element(By.ID, "compose-send-button")
