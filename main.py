@@ -35,7 +35,7 @@ agora = datetime.now(fuso_br)
 
 # --- 3. GATILHO AUTOMÁTICO ---
 HORA_ALVO = 15
-MIN_ALVO = 38
+MIN_ALVO = 52
 
 # Verifica se estamos no minuto exato e se ainda não disparou HOJE
 if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
