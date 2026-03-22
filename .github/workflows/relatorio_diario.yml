@@ -5,7 +5,7 @@ on:
     # O horário no GitHub é em UTC (Londres). 
     # Brasil (Brasília) é UTC-3. 
     # Para rodar às 15:08 no Brasil, colocamos 18:08 UTC.
-    - cron: '8 18 * * *'
+    - cron: '30 18 * * *'
   workflow_dispatch: # Permite que você rode manualmente pelo botão no GitHub para testar
 
 jobs:
