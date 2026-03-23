@@ -64,7 +64,6 @@ def render():
             # Opcional: proteja chaves de login/menu se necessário
             if key not in ["auth_status", "menu_selecionado"]:
                 del st.session_state[key]
-        st.rerun()
 
     # --- INTERFACE ---
     st.title("🚧 Registro de Demanda Infra")
