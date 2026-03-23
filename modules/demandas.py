@@ -67,14 +67,14 @@ def render():
         st.rerun()
 
     # --- INTERFACE ---
-    st.title("📶 Registro de Campo")
+    st.title("🚧 Registro de Demanda Infra")
     st.subheader("Informe os dados da operação:")
 
     # Container superior: Técnico e Demanda
     with st.container():
         col_top1, col_top2 = st.columns(2)
         with col_top1:
-            tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
+            tecnico_selecionado = st.selectbox("Atendente Responsável", LISTA_TECNICOS, key="tec_select")
         with col_top2:
             protocolo_demanda = st.text_input("Protocolo da Demanda", key="prot_demanda_text", placeholder="Ex: 2024...")
 
