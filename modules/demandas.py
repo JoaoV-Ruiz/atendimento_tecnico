@@ -6,7 +6,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from geopy.geocoders import Nominatim
 from datetime import datetime
-from styles import apply_styles  # Integração com seu arquivo de estilos
+from styles import apply_styles 
 
 # --- CONFIGURAÇÕES DO MÓDULO ---
 LISTA_TECNICOS = [
@@ -17,27 +17,21 @@ LISTA_TECNICOS = [
 ]
 
 def render():
-    # Aplica o CSS global do seu sistema
     apply_styles()
     
     # 1. FUNÇÕES DE SUPORTE
     def conectar_google_sheets():
         try:
-            # Busca credenciais nos Secrets do Streamlit Cloud
-            creds_json = st.secrets.get("GOOGLE_PLANS_JSON")
-            spreadsheet_url = st.secrets.get("URL_PLANILHA_DEMANDA")
-            
+            creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
+            spreadsheet_url = st.secrets.get("URL_PLANILHA")
             if not creds_json or not spreadsheet_url:
-                st.error("Configurações de Planilha não encontradas nos Secrets.")
                 return None
-
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
             creds_info = json.loads(creds_json)
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-            client = gspread.authorize(creds)
-            return client.open_by_url(spreadsheet_url).get_worksheet(0)
+            return gspread.authorize(creds).open_by_url(spreadsheet_url).get_worksheet(0)
         except Exception as e:
-            st.error(f"Erro ao conectar com Google Sheets: {e}")
+            st.error(f"Erro ao conectar: {e}")
             return None
 
     @st.cache_data(ttl=3600)
@@ -50,16 +44,26 @@ def render():
                 location = geolocator.reverse(f"{nums[0]}, {nums[1]}", timeout=10)
                 if location:
                     address = location.raw.get('address', {})
-                    # Retorna apenas a cidade/município
-                    return address.get('city') or address.get('town') or address.get('village') or address.get('suburb') or ""
+                    return address.get('city') or address.get('town') or address.get('village') or ""
         except: return "Erro na busca"
         return ""
 
     def reset_form():
-        """Callback para limpar o formulário sem causar erro de rerun."""
+        """
+        Limpa todos os campos do session_state. 
+        Para limpar as checkboxes de portas (p_1, p_2...), usamos um loop.
+        """
         for key in list(st.session_state.keys()):
+            # Mantemos apenas o que for essencial para o sistema (login/menu)
             if key not in ["auth_status", "menu_selecionado"]:
                 del st.session_state[key]
+        
+        # Opcional: Definir valores padrões para chaves específicas se o del não bastar
+        st.session_state["tec_select"] = LISTA_TECNICOS[0]
+        st.session_state["tipo_proto_key"] = "Ativação"
+        st.session_state["tipo_caixa_key"] = "1x16"
+        st.session_state["sem_id_key"] = "Não"
+        st.session_state["problema_key"] = "CTO/porta sem sinal"
 
     # --- INTERFACE ---
     st.title("📶 Registro de Campo")
@@ -70,7 +74,7 @@ def render():
         with col_top1:
             tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
         with col_top2:
-            protocolo_demanda = st.text_input("Protocolo da Demanda", key="prot_demanda_text", placeholder="Ex: 2024...")
+            protocolo_demanda = st.text_input("Protocolo da Demanda", key="prot_demanda_text")
 
     st.divider()
 
@@ -89,14 +93,14 @@ def render():
         problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
 
     with col2:
-        coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text", placeholder="-23.55, -46.63")
-        sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True, index=1)
+        coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
+        sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
         
         cidade_detectada = buscar_cidade(coords)
         if cidade_detectada:
             st.info(f"📍 Localidade: **{cidade_detectada}**")
 
-    # --- SELEÇÃO DE PORTAS ---
+    # --- PORTAS ---
     portas_selecionadas = []
     if problema == "CTO/porta sem sinal":
         st.write("---")
@@ -113,10 +117,10 @@ def render():
                     if st.checkbox(f"Porta {i}", key=f"p_{i}"):
                         portas_selecionadas.append(str(i))
 
-    # --- BOTÕES DE AÇÃO ---
     st.divider()
     c_limpar, c_salvar = st.columns(2)
     with c_limpar:
+        # O on_click chamará o reset_form e o rerun do Streamlit atualizará os widgets
         st.button("🗑️ Limpar Formulário", on_click=reset_form, use_container_width=True)
 
     with c_salvar:
@@ -132,8 +136,6 @@ def render():
                             problema_final += f" (Portas: {', '.join(portas_selecionadas)})"
                         
                         data_registro = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        
-                        # Colunas: Data, Cidade, Técnico, Protocolo, Problema, Demanda
                         nova_linha = [data_registro, cidade_detectada, tecnico_selecionado, protocolo, problema_final, protocolo_demanda]
                         
                         aba.append_row(nova_linha)
@@ -142,8 +144,7 @@ def render():
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")
 
-    # --- MÁSCARA PARA COPIAR ---
-    st.divider()
+    # --- MÁSCARA ---
     def check_mark(opcao_selecionada, opcao_alvo):
         return "(X)" if opcao_selecionada == opcao_alvo else "( )"
 
