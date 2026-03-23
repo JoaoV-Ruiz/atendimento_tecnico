@@ -1,7 +1,7 @@
 import streamlit as st
 import pytz
 from datetime import datetime, timedelta
-from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance
+from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas
 from styles import apply_styles
 
 # 1. Configuração da Página
