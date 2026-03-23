@@ -29,49 +29,38 @@ def render_timer_box(hora_brasilia, hora_coleta):
 def apply_styles():
     st.markdown("""
         <style>
-        /* Fundo Geral */
-        .stApp { background-color: #0e1117 !important; color: #ffffff !important; }
-        
-        /* Textos e Títulos */
-        h1, h2, h3, p, label, .stMarkdown { color: #ffffff !important; }
-        
-        /* Inputs e Campos de Texto */
-        .stTextInput input, .stSelectbox div, .stTextArea textarea {
-            background-color: #1d2129 !important; 
-            color: white !important;
+        /* 1. Remove bordas de foco e contornos genéricos que o Streamlit cria */
+        .stTextInput div, .stSelectbox div, .stTextArea div {
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        /* 2. Aplica a borda apenas no campo real de input */
+        div[data-baseweb="input"], div[data-baseweb="select"] {
             border: 1px solid #30363d !important;
+            border-radius: 8px !important;
+            background-color: #0d1117 !important;
         }
-        
-        /* Barra Lateral */
-        section[data-testid="stSidebar"] { background-color: #161b22 !important; }
-        
-        /* Estilização de Metrics */
-        [data-testid="stMetricValue"] { 
-            font-size: 35px; 
-            color: #4da3ff !important; 
-            font-weight: bold; 
+
+        /* 3. Estiliza o estado de foco (quando clica no campo) */
+        div[data-baseweb="input"]:focus-within, div[data-baseweb="select"]:focus-within {
+            border: 1px solid #4da3ff !important;
+            box-shadow: 0 0 0 1px #4da3ff !important;
         }
-        [data-testid="stMetric"] { 
-            background-color: #1d2129; 
-            padding: 15px; 
-            border-radius: 12px; 
-            border: 1px solid #30363d; 
+
+        /* 4. Ajuste específico para Selectbox (evita borda dupla no dropdown) */
+        div[role="combobox"] {
+            border: none !important;
         }
-        
-        /* Rodapé Fixo */
-        .footer { 
-            position: fixed; 
-            left: 0; 
-            bottom: 0; 
-            width: 100%; 
-            background-color: rgba(13, 17, 23, 0.9); 
-            color: #8b949e; 
-            text-align: center; 
-            padding: 5px; 
-            font-size: 13px; 
-            font-weight: bold; 
-            z-index: 100; 
+
+        /* 5. Ajuste de cor do texto para garantir leitura */
+        input, select, textarea {
+            color: #ffffff !important;
+        }
+
+        /* 6. Remove a borda vermelha chata de erro/validação se houver */
+        .stTextInput fieldset, .stSelectbox fieldset {
+            border: none !important;
         }
         </style>
-        <div class="footer"> © João Vitor Ruiz Barboza </div>
-        """, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
