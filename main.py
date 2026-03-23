@@ -34,8 +34,8 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # --- 3. GATILHO AUTOMÁTICO ---
-HORA_ALVO = 23
-MIN_ALVO = 45 # Ajuste para o horário que desejar
+HORA_ALVO = 17
+MIN_ALVO = 53 # Ajuste para o horário que desejar
 
 if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
     # Só entra se o dia de hoje for diferente do último disparo registrado nesta sessão
