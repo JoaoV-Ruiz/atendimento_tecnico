@@ -24,8 +24,8 @@ def render():
     def conectar_google_sheets():
         try:
             # Busca credenciais nos Secrets do Streamlit Cloud
-            creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
-            spreadsheet_url = st.secrets.get("URL_PLANILHA")
+            creds_json = st.secrets.get("GOOGLE_PLANS_JSON")
+            spreadsheet_url = st.secrets.get("URL_PLANILHA_DEMANDA")
             
             if not creds_json or not spreadsheet_url:
                 st.error("Configurações de Planilha não encontradas nos Secrets.")
