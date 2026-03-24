@@ -28,7 +28,7 @@ def render():
             st.session_state[f"c_batida_{indice}"] = st.session_state[key_temp]
             atualizar_portas()
 
-       def conectar_google_sheets():
+    def conectar_google_sheets():
         try:
             # 1. Puxa a string bruta do Secret
             creds_json = st.secrets["GOOGLE_JSON_CREDENTIALS"]
