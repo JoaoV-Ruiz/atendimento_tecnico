@@ -160,8 +160,7 @@ def render():
                             # Preparamos os dados
                             linha = [
                                 str(data_hora), 
-                                str(st.session_state.batida_proto), 
-                                str(st.session_state.batida_tec), # Adicionei o técnico que faltava na sua lista anterior
+                                str(st.session_state.batida_proto), # Adicionei o técnico que faltava na sua lista anterior
                                 str(st.session_state.batida_cx), 
                                 str(portas_str)
                             ]
