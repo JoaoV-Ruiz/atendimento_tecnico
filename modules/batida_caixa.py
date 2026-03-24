@@ -156,9 +156,30 @@ def render():
                         try:
                             fuso_br = pytz.timezone('America/Sao_Paulo')
                             data_hora = datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M")
-                            linha = [str(data_hora), str(st.session_state.batida_proto), str(st.session_state.batida_cx), str(portas_str)]
-                            aba.append_row(linha, value_input_option='USER_ENTERED')
+                            
+                            # Preparamos os dados
+                            linha = [
+                                str(data_hora), 
+                                str(st.session_state.batida_proto), 
+                                str(st.session_state.batida_tec), # Adicionei o técnico que faltava na sua lista anterior
+                                str(st.session_state.batida_cx), 
+                                str(portas_str)
+                            ]
+                            
+                            # --- SOLUÇÃO PARA ADICIONAR SEMPRE NO FINAL ---
+                            # O table_range garante que ele procure a próxima linha livre a partir da coluna A
+                            aba.append_row(
+                                linha, 
+                                value_input_option='USER_ENTERED',
+                                insert_data_option='INSERT_ROWS',
+                                table_range='A1'
+                            )
+                            
                             st.toast("Registrado com sucesso!", icon="✅")
                             st.balloons()
+                            
+                            # Opcional: Limpar campos após sucesso para evitar registros duplicados acidentais
+                            # limpar_campos() 
+                            
                         except Exception as e:
                             st.error(f"Erro ao inserir linha: {e}")
