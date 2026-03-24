@@ -30,29 +30,38 @@ def render():
 
     def conectar_google_sheets():
         try:
-            # 1. Puxa a string do Secret
-            creds_json = st.secrets["GOOGLE_JSON_CREDENTIALS_2"]
-            spreadsheet_url = st.secrets["URL_PLANILHA"]
+            # 1. Pega os dados dos Secrets
+            creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
+            spreadsheet_url = st.secrets.get("URL_PLANILHA")
     
-            # 2. Transforma a string em dicionário
+            if not creds_json:
+                st.error("❌ Erro: Chave 'GOOGLE_JSON_CREDENTIALS_2' não encontrada nos Secrets.")
+                return None
+    
+            # 2. Converte para dicionário
             creds_info = json.loads(creds_json)
     
-            # --- O SEGREDO ESTÁ AQUI ---
-            # Isso converte o texto "\n" em quebras de linha reais que o Google exige
-            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-            # ---------------------------
+            # --- CORREÇÃO DA CHAVE PRIVADA ---
+            # O Google exige que os caracteres '\n' sejam quebras de linha reais.
+            # Mesmo que no seu Secret pareça certo, o Python pode ler como texto puro.
+            if "private_key" in creds_info:
+                creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+            # ---------------------------------
     
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
             
-            # 3. Autentica usando o dicionário corrigido
+            # 3. Autenticação usando o DICIONÁRIO (não o nome do arquivo)
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             client = gspread.authorize(creds)
             
+            # 4. Abre a planilha (Certifique-se que o e-mail do Service Account tem acesso de LEITOR nela)
             return client.open_by_url(spreadsheet_url).get_worksheet(0)
-        
+    
+        except json.JSONDecodeError:
+            st.error("❌ Erro: O formato do JSON nos Secrets está inválido. Verifique as aspas e vírgulas.")
         except Exception as e:
-            st.error(f"Erro na conexão: {e}")
-            return None
+            st.error(f"❌ Erro na conexão com Google Sheets: {str(e)}")
+        return None
 
     def limpar_campos():
         """ Reseta todos os campos, incrementa versão e recarrega o app """
