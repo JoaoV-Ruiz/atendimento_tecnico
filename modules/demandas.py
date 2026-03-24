@@ -57,7 +57,7 @@ def render():
                 if location:
                     address = location.raw.get('address', {})
                     return address.get('city') or address.get('town') or address.get('village') or ""
-        except: return ""
+        except: return "Erro na busca"
         return ""
 
     def reset_form():
@@ -75,7 +75,7 @@ def render():
     # --- INTERFACE ---
     st.title("📶 Registro de Campo")
     
-    # Linha Superior
+    # 1. Linha Superior: Técnico e Protocolo Demanda
     col_t1, col_t2 = st.columns([1.5, 1])
     with col_t1:
         tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
@@ -84,31 +84,51 @@ def render():
 
     st.markdown("---")
 
-    # Layout de Colunas (Organização das Textboxes)
-    col_esquerda, col_direita = st.columns([1.5, 1])
-
-    with col_esquerda:
+    # 2. BLOCO DE CAMPOS ORGANIZADOS (Layout Espelhado)
+    # Linha 1: Nome do Cliente | Tipo de Protocolo
+    c1_l1, c2_l1 = st.columns([1.5, 1])
+    with c1_l1:
         nome_cliente = st.text_input("Nome do Cliente", key="nome_text")
-        protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
-        num_cto = st.text_input("Número da CTO", key="cto_text")
-        sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
-        st.write(" ")
-        problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
-
-    with col_direita:
+    with c2_l1:
+        st.write(" ") # Ajuste de alinhamento vertical
         tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
+
+    # Linha 2: Protocolo Solicitação | Tipo da Caixa
+    c1_l2, c2_l2 = st.columns([1.5, 1])
+    with c1_l2:
+        protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
+    with c2_l2:
         st.write(" ")
         tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
-        coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
-        
-        cidade_detectada = buscar_cidade(coords)
-        if cidade_detectada:
-            st.info(f"📍 Localidade: **{cidade_detectada}**")
-            
-        sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
-        observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=110)
 
-    # Seleção de Portas
+    # Linha 3: Número da CTO | Coordenadas
+    c1_l3, c2_l3 = st.columns([1.5, 1])
+    with c1_l3:
+        num_cto = st.text_input("Número da CTO", key="cto_text")
+    with c2_l3:
+        coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
+
+    # Linha 4: Sinal da CTO | Identificação
+    c1_l4, c2_l4 = st.columns([1.5, 1])
+    with c1_l4:
+        sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
+    with c2_l4:
+        st.write(" ")
+        sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
+
+    # Exibe localidade detectada
+    cidade_detectada = buscar_cidade(coords)
+    if cidade_detectada:
+        st.info(f"📍 Localidade: **{cidade_detectada}**")
+
+    st.markdown("---")
+
+    # 3. Problema e Observações
+    # Rádio de Problema em uma linha e Observações em outra para manter a clareza
+    problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
+    observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=80)
+
+    # 4. Portas (Aparece se o problema for falta de sinal)
     portas_selecionadas = []
     if problema == "CTO/porta sem sinal":
         st.write("---")
@@ -126,7 +146,7 @@ def render():
 
     st.divider()
 
-    # Botões
+    # 5. Botões de Ação
     c_limpar, c_salvar = st.columns(2)
     with c_limpar:
         st.button("🗑️ Limpar Formulário", on_click=reset_form, use_container_width=True)
@@ -144,12 +164,12 @@ def render():
                         data_reg = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         nova_linha = [data_reg, cidade_detectada, tecnico_selecionado, protocolo, prob_f, protocolo_demanda]
                         aba.append_row(nova_linha)
-                        st.toast("Dados registrados!", icon="✅")
+                        st.toast("Dados registrados com sucesso!", icon="✅")
                         st.balloons()
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")
 
-    # --- MÁSCARA PARA COPIAR (DESIGN LIMPO) ---
+    # --- MÁSCARA ---
     def ck(o_s, o_a): return "(X)" if o_s == o_a else "( )"
     txt_p = f"\n          Portas Afetadas: {', '.join(portas_selecionadas)}" if portas_selecionadas else ""
     txt_obs = f"\nOBSERVAÇÕES: {observacoes}" if observacoes else ""
@@ -173,7 +193,7 @@ Coordenadas: {coords}
 =================================================
 Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
 
-   st.subheader("📄 Máscara para Copiar")
+    st.subheader("📄 Máscara para Copiar")
     st.code(mascara, language="text")
 
     js_copy = json.dumps(mascara)
