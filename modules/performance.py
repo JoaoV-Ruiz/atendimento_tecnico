@@ -125,7 +125,7 @@ def analisar_dados_encerramentos(caminho_csv, mes, ano):
         st.error(f"❌ Erro CSV: {e}")
         return None
 
-@st.cache_data(ttl=900, show_spinner="🤖 Sincronizando com ERP...")
+    @st.cache_data(ttl=900, show_spinner="🤖 Sincronizando com ERP...")
     def disparar_automacao_erp(download_path_obj, mes, ano):
         chrome_options = Options()
         chrome_options.add_argument("--headless=new") # Headless mais moderno
