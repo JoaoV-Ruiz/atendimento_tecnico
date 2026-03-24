@@ -32,35 +32,51 @@ def render():
             atualizar_portas()
 
     def conectar_google_sheets():
+    try:
+        # 1. Teste de existência dos segredos
+        if "GOOGLE_JSON_CREDENTIALS" not in st.secrets:
+            return st.error("❌ Erro: Chave 'GOOGLE_JSON_CREDENTIALS' não encontrada nos Secrets.")
+        if "URL_PLANILHA" not in st.secrets:
+            return st.error("❌ Erro: Chave 'URL_PLANILHA' não encontrada nos Secrets.")
+
+        raw_creds = st.secrets["GOOGLE_JSON_CREDENTIALS"]
+        spreadsheet_url = st.secrets["URL_PLANILHA"]
+
+        # 2. Teste de integridade do JSON
         try:
-            # 1. Puxa a string bruta do Secret usando a forma correta
-            # Você pode usar st.secrets["CHAVE"] ou st.secrets.get("CHAVE")
-            raw_creds = st.secrets.get("GOOGLE_JSON_CREDENTIALS")
-            spreadsheet_url = st.secrets.get("URL_PLANILHA")
-
-            if not raw_creds:
-                st.error("❌ Erro: Credenciais do Google não encontradas nos Secrets.")
-                return None
-
-            # 2. Converte a string para um dicionário Python e aplica a correção da chave privada
             creds_info = json.loads(raw_creds)
-            
-            # Garante que as quebras de linha sejam interpretadas corretamente
-            if "private_key" in creds_info:
-                creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-    
-            scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-            
-            # 3. Autentica
+        except Exception as json_err:
+            return st.error(f"❌ Erro no formato do JSON: {json_err}")
+
+        # 3. Tratamento da chave
+        if "private_key" in creds_info:
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+        else:
+            return st.error("❌ Erro: 'private_key' ausente dentro do JSON.")
+
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        
+        # 4. Tentativa de Autenticação
+        try:
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             client = gspread.authorize(creds)
-            
-            # 4. Abre a planilha e retorna a primeira aba
+        except Exception as auth_err:
+            return st.error(f"❌ Erro na Autenticação Google: {auth_err}")
+
+        # 5. Tentativa de Acesso à Planilha
+        try:
             return client.open_by_url(spreadsheet_url).get_worksheet(0)
+        except Exception as url_err:
+            # Aqui pegamos erro de permissão (403) ou URL inválida
+            return st.error(f"❌ Erro ao abrir URL da Planilha: {url_err}")
             
-        except Exception as e:
-            st.error(f"❌ Erro na conexão: {e}")
-            return None
+    except Exception as e:
+        # Captura qualquer coisa que escapou dos testes acima
+        import traceback
+        erro_detalhado = traceback.format_exc()
+        st.error(f"❌ Erro Crítico: {e}")
+        st.expander("Ver detalhes técnicos").code(erro_detalhado)
+        return None
 
     def limpar_campos():
         """ Reseta todos os campos, incrementa versão e recarrega o app """
