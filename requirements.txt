@@ -9,3 +9,5 @@ webdriver-manager
 openpyxl
 pytz
 geopy
+speech_recognition
+tempfile
