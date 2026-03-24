@@ -64,7 +64,6 @@ def formatar_segundos(segundos):
 
 @st.cache_data(ttl=600)
 def load_technical_data():
-    # Busca segura das chaves (sem espaços extras no nome)
     url = st.secrets.get("SPREADSHEET_URL") or st.secrets.get("URL_PLANILHA")
     creds_json_str = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
     
@@ -75,26 +74,38 @@ def load_technical_data():
     try:
         creds_dict = json.loads(creds_json_str)
         
-        # --- TRATAMENTO ANTI-ERRO DE PADDING E PEM ---
         if "private_key" in creds_dict:
-            key = creds_dict["private_key"]
-            # Limpa espaços nas pontas e garante que \n seja quebra de linha real
-            key = key.strip().replace("\\n", "\n")
-            creds_dict["private_key"] = key
+            # 1. Pega a chave bruta
+            pk = creds_dict["private_key"]
+            
+            # 2. LIMPEZA AGRESSIVA:
+            # Remove escapes de barra, espaços e garante que as quebras de linha sejam \n reais
+            pk = pk.replace("\\n", "\n")
+            
+            # 3. Reconstrói a chave garantindo que não haja espaços entre o conteúdo Base64
+            # Isso resolve o erro de 'Incorrect padding'
+            lines = pk.split('\n')
+            clean_lines = []
+            for line in lines:
+                clean_line = line.strip()
+                if clean_line:
+                    clean_lines.append(clean_line)
+            
+            creds_dict["private_key"] = "\n".join(clean_lines)
             
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         
-        # Abre a planilha limpando a URL de espaços invisíveis
         spreadsheet = client.open_by_url(url.strip())
         sheet = spreadsheet.worksheet("AtendimentoTécnico")
         return sheet.get("A8:AF20")
         
     except Exception as e:
-        st.error(f"❌ Erro Planilha Performance: {e}")
-        with st.expander("Log de Diagnóstico"):
-            st.code(traceback.format_exc())
+        st.error(f"❌ Erro Crítico na Planilha: {e}")
+        # Se falhar, vamos ver como a chave está chegando (sem mostrar a chave toda por segurança)
+        if "private_key" in locals():
+            st.info(f"Tamanho da chave processada: {len(creds_dict['private_key'])} caracteres.")
         return None
 
 def analisar_dados_encerramentos(caminho_csv, mes, ano):
