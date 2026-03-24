@@ -1,48 +1,14 @@
 import streamlit as st
 import pytz
 from datetime import datetime, timedelta
-from styles import apply_styles
 
-try:
-    from modules import amarelos
-except Exception as e:
-    st.error(f"Erro ao carregar módulo Amarelos: {e}")
-
-try:
-    from modules import batida_caixa
-except Exception as e:
-    st.error(f"Erro ao carregar módulo Batida de Caixa: {e}")
-
-try:
-    from modules import encerramentos
-except Exception as e:
-    st.error(f"Erro ao carregar módulo Encerramentos: {e}")
-
-try:
-    from modules import portabilidade
-except Exception as e:
-    st.error(f"Erro ao carregar módulo Portabilidade: {e}")
-
-try:
-    from modules import performance
-except Exception as e:
-    st.error(f"Erro ao carregar módulo Performance: {e}")
-
-try:
-    from modules import demandas
-except Exception as e:
-    st.error(f"Erro ao carregar módulo Demandas: {e}")
-
-try:
-    from modules import escrita
-except Exception as e:
-    st.error(f"Erro ao carregar módulo Escrita: {e}")
-
-from styles import apply_styles
-# 1. Configuração da Página
+# --- 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA COISA) ---
 st.set_page_config(page_title="Sistema Atendimento Técnico", layout="wide", page_icon="📊")
 
-# 2. Inicialização de Segurança (Boot)
+# --- 2. IMPORTAÇÃO DE ESTILOS ---
+from styles import apply_styles
+
+# --- 3. INICIALIZAÇÃO DE SEGURANÇA (BOOT) ---
 def boot_session_state():
     if 'batida_version' not in st.session_state: st.session_state.batida_version = 0
     if 'batida_proto' not in st.session_state: st.session_state.batida_proto = ""
@@ -65,33 +31,35 @@ def boot_session_state():
 boot_session_state()
 apply_styles()
 
+# --- 4. IMPORTAÇÃO DOS MÓDULOS (BLINDADA) ---
+# Importamos um a um para que se um der erro, o sistema não morra
+try:
+    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, escrita
+except Exception as e:
+    st.warning(f"Aviso: Alguns módulos estão sendo carregados... (Erro: {e})")
+
 fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
-# --- 3. GATILHO AUTOMÁTICO ---
+# --- 5. GATILHO AUTOMÁTICO ---
 HORA_ALVO = 23
-MIN_ALVO = 45 # Ajuste para o horário que desejar
+MIN_ALVO = 45 
 
 if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
-    # Só entra se o dia de hoje for diferente do último disparo registrado nesta sessão
     if st.session_state.dia_disparo != agora.day:
-        
-        # MARCA COMO FEITO IMEDIATAMENTE (antes de rodar a função pesada)
         st.session_state.dia_disparo = agora.day
-        
-        print(f"🚀 Disparo único iniciado: {agora.strftime('%H:%M:%S')}")
-        
         with st.status("🤖 Enviando relatório diário...") as status:
-            sucesso = amarelos.realizar_coleta_e_envio_automatizado()
-            
-            if sucesso:
-                status.update(label="✅ Enviado com sucesso!", state="complete")
-            else:
-                # Se der erro real no Selenium, resetamos a trava para tentar no próximo refresh
-                st.session_state.dia_disparo = 0
-                status.update(label="❌ Erro no envio. Tentando novamente...", state="error")
-                
-# --- 4. INTERFACE ---
+            try:
+                sucesso = amarelos.realizar_coleta_e_envio_automatizado()
+                if sucesso:
+                    status.update(label="✅ Enviado com sucesso!", state="complete")
+                else:
+                    st.session_state.dia_disparo = 0
+                    status.update(label="❌ Erro no envio.", state="error")
+            except:
+                status.update(label="❌ Módulo Amarelos indisponível.", state="error")
+
+# --- 6. INTERFACE ---
 st.sidebar.title("🚀 Menu Principal")
 escolha = st.sidebar.radio(
     "Selecione a ferramenta:", 
@@ -101,17 +69,21 @@ escolha = st.sidebar.radio(
 st.sidebar.divider()
 st.sidebar.info(f"📅 **Hoje:** {agora.strftime('%d/%m/%Y')}\n\n🕒 **Hora:** {agora.strftime('%H:%M:%S')}")
 
-if escolha == "📑 Resumo Encerramento":
-    encerramentos.render()
-elif escolha == "🟡 Resumo Amarelos":
-    amarelos.render()
-elif escolha == "📲 Portabilidade":
-    portabilidade.render()
-elif escolha == "💰 Batida de Caixa":
-    batida_caixa.render()
-elif escolha == "📈 Performance TME":
-    performance.render()
-elif escolha == "🚧 Demanda Infra":
-    demandas.render()
-elif escolha == "🎙️ BOT para escrita":
-    escrita.render()
+# Renderização segura
+try:
+    if escolha == "📑 Resumo Encerramento":
+        encerramentos.render()
+    elif escolha == "🟡 Resumo Amarelos":
+        amarelos.render()
+    elif escolha == "📲 Portabilidade":
+        portabilidade.render()
+    elif escolha == "💰 Batida de Caixa":
+        batida_caixa.render()
+    elif escolha == "📈 Performance TME":
+        performance.render()
+    elif escolha == "🚧 Demanda Infra":
+        demandas.render()
+    elif escolha == "🎙️ BOT para escrita":
+        escrita.render()
+except NameError:
+    st.error("O módulo selecionado não foi carregado corretamente. Verifique o arquivo na pasta 'modules'.")
