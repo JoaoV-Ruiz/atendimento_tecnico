@@ -23,7 +23,6 @@ def conectar_google_sheets():
 
         # 2. Carrega e limpa a chave privada (Crucial para evitar Invalid JWT Signature)
         creds_info = json.loads(raw_creds)
-        st.write(f"DEBUG: O e-mail que está tentando acessar é: {creds_info.get('client_email')}")
         if "private_key" in creds_info:
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         
