@@ -14,8 +14,8 @@ import json
 import pytz
 
 # --- CONFIGURAÇÕES ---
-URL_COLETA = "https://atendimento.osir.net.br/inviabilidade/huawei/filaProvisionamento.php"
-URL_CHAT = "https://chat.osirnet.com.br/accounts/login/"
+URL_COLETA = st.secrets["URL_COLETA"]
+URL_CHAT = st.secrets["URL_CHAT"]
 
 TABELA_NOMES = {
     "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
