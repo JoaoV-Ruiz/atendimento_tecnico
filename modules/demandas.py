@@ -181,7 +181,9 @@ Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
 
     st.subheader("📄 Máscara para Copiar")
     
-    # EM VEZ DE st.code, USAMOS ESTE CONTAINER PERSONALIZADO:
+    st.subheader("📄 Máscara para Copiar")
+    
+    # Criamos um estilo que "trava" o tamanho da fonte para tudo que estiver lá dentro
     st.markdown(f"""
         <div style="
             background-color: #161b22; 
@@ -191,10 +193,12 @@ Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
             border: 1px solid #30363d;
             font-family: 'Courier New', Courier, monospace;
             white-space: pre-wrap;
-            line-height: 1.5;
-            font-size: 14px;
+            line-height: 1.6;
+            font-size: 15px !important;
         ">
+            <span style="color: #7ee787 !important; font-size: 15px !important; font-weight: normal !important;">
 {mascara}
+            </span>
         </div>
     """, unsafe_allow_html=True)
 
