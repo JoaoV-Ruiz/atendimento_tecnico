@@ -181,24 +181,24 @@ Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
 
     st.subheader("📄 Máscara para Copiar")
     
-    st.subheader("📄 Máscara para Copiar")
-    
-    # Criamos um estilo que "trava" o tamanho da fonte para tudo que estiver lá dentro
+    # Usamos <pre> para garantir que o navegador trate tudo como texto simples (plaintext)
     st.markdown(f"""
         <div style="
             background-color: #161b22; 
-            color: #7ee787; 
             padding: 20px; 
             border-radius: 10px; 
             border: 1px solid #30363d;
-            font-family: 'Courier New', Courier, monospace;
-            white-space: pre-wrap;
-            line-height: 1.6;
-            font-size: 15px !important;
         ">
-            <span style="color: #7ee787 !important; font-size: 15px !important; font-weight: normal !important;">
-{mascara}
-            </span>
+            <pre style="
+                color: #7ee787 !important; 
+                font-family: 'Courier New', Courier, monospace !important;
+                font-size: 14px !important;
+                white-space: pre-wrap !important;
+                word-wrap: break-word !important;
+                margin: 0 !important;
+                background-color: transparent !important;
+                border: none !important;
+            ">{mascara}</pre>
         </div>
     """, unsafe_allow_html=True)
 
