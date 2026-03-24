@@ -64,7 +64,7 @@ def formatar_segundos(segundos):
 
 @st.cache_data(ttl=600)
 def load_technical_data():
-    url = st.secrets.get("URL_PLANILHA")
+    url = st.secrets.get("SPREADSHEET_URL")
     creds_json_str = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
     
     if not url or not creds_json_str:
