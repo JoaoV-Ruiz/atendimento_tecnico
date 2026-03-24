@@ -15,23 +15,40 @@ def apply_styles():
             border-right: 1px solid #30363d;
         }
 
-        /* 3. INPUTS, TEXTAREAS E SELECTBOX (FUNDO PRETO, LETRA BRANCA) */
-        /* Força o fundo escuro e texto branco em todos os campos de entrada */
-        input, textarea, [data-baseweb="select"] > div, 
-        .stTextArea textarea, .stTextInput input, .stSelectbox div[data-baseweb="select"] {
+        /* 3. INPUTS, TEXTAREAS E SELECTBOX (VERSÃO BLINDADA) */
+        /* Aqui atacamos todas as camadas do input do Streamlit */
+        div[data-baseweb="input"] > div, 
+        div[data-baseweb="base-input"] > div,
+        div[data-baseweb="textarea"] > textarea,
+        .stTextInput input, 
+        .stTextArea textarea {
             background-color: #1d2129 !important;
             color: #ffffff !important;
             border: 1px solid #444c56 !important;
             border-radius: 6px !important;
-            -webkit-text-fill-color: #ffffff !important; /* Essencial para alguns navegadores */
         }
 
-        /* Garante que o texto digitado seja branco e visível */
-        input:focus, textarea:focus {
-            background-color: #0d1117 !important;
+        /* Garante que o texto digitado seja BRANCO PURO */
+        input, textarea {
             color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+        }
+
+        /* Cor do texto quando o campo está vazio (Placeholder) */
+        input::placeholder, textarea::placeholder {
+            color: #8b949e !important;
+            -webkit-text-fill-color: #8b949e !important;
+        }
+
+        /* Remove o fundo branco chato que aparece em alguns navegadores */
+        div[data-baseweb="base-input"], div[data-baseweb="input"] {
+            background-color: transparent !important;
+        }
+
+        /* Foco do campo (quando você clica para digitar) */
+        div[data-baseweb="input"]:focus-within {
             border-color: #58a6ff !important;
-            outline: none !important;
+            background-color: #0d1117 !important;
         }
 
         /* 4. LABELS (NOMES DOS CAMPOS) */
