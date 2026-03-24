@@ -31,11 +31,11 @@ def render():
     def conectar_google_sheets():
         try:
             # 1. Pega os dados dos Secrets
-            creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
+            creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS")
             spreadsheet_url = st.secrets.get("URL_PLANILHA")
     
             if not creds_json:
-                st.error("❌ Erro: Chave 'GOOGLE_JSON_CREDENTIALS_2' não encontrada nos Secrets.")
+                st.error("❌ Erro: Chave 'GOOGLE_JSON_CREDENTIALS' não encontrada nos Secrets.")
                 return None
     
             # 2. Converte para dicionário
