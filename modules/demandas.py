@@ -171,62 +171,62 @@ def render():
 
    # --- MÁSCARA (Ajustada para não ter fundo escuro) ---
     def ck(o_s, o_a): return "(X)" if o_s == o_a else "( )"
-    txt_p = f"\n          Portas Afetadas: {', '.join(portas_selecionadas)}" if portas_selecionadas else ""
-    txt_obs = f"\nOBSERVAÇÕES: {observacoes}" if observacoes else ""
-    
-    mascara = f"""Nome do Cliente: {nome_cliente}
-Protocolo da Solicitação: {protocolo}
-Localidade: {cidade_detectada}
-=================================================
-Tipo de Protocolo: {ck(tipo_proto, "Ativação")} Ativação {ck(tipo_proto, "Manutenção")} Manutenção
-=================================================
-Tipo da Caixa: {ck(tipo_caixa, "1x16")} 1x16 {ck(tipo_caixa, "1x8")} 1x8
-
-Problema: {ck(problema, "CTO/porta sem sinal")} CTO/porta sem sinal {txt_p}
-          {ck(problema, "CTO cheia")} CTO cheia
-          {ck(problema, "CTO/porta com sinal fora do padrão")} CTO/porta com sinal fora do padrão
-{txt_obs}
-          
-Número da CTO: {num_cto}
-Sinal da CTO: {sinal_cto}
-Coordenadas: {coords}
-=================================================
-Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
-
-    st.subheader("📄 Máscara para Copiar")
-    
-    # Substituído st.code por este bloco HTML para visual limpo
-    st.markdown(f"""
-        <div style="
-            background-color: #161b22; 
-            padding: 20px; 
-            border-radius: 10px; 
-            border: 1px solid #30363d;
-        ">
-            <p style="
-                color: #7ee787 !important; 
-                font-family: 'Courier New', Courier, monospace !important;
-                font-size: 14px !important;
-                white-space: pre-wrap !important;
-                line-height: 1.6 !important;
-                margin: 0 !important;
-                background: none !important;
-            ">{mascara}</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    st.write("") # Espaçamento
-
-    # Botão de Copiar (Mantido)
-    js_copy = json.dumps(mascara)
-    components.html(f"""
-        <button id="cp" style="width:100%; height:45px; background:#4da3ff; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px; font-family:sans-serif;">📋 COPIAR RELATÓRIO</button>
-        <script>
-        document.getElementById('cp').onclick = function() {{
-            const t = document.createElement("textarea"); t.value = {js_copy}; document.body.appendChild(t);
-            t.select(); document.execCommand('copy'); document.body.removeChild(t);
-            this.style.background = '#28a745'; this.innerText = '✅ COPIADO!';
-            setTimeout(() => {{ this.style.background = '#4da3ff'; this.innerText = '📋 COPIAR RELATÓRIO'; }}, 2000);
-        }}
-        </script>
-    """, height=60)
+            txt_p = f"\n          Portas Afetadas: {', '.join(portas_selecionadas)}" if portas_selecionadas else ""
+            txt_obs = f"\nOBSERVAÇÕES: {observacoes}" if observacoes else ""
+            
+            mascara = f"""Nome do Cliente: {nome_cliente}
+        Protocolo da Solicitação: {protocolo}
+        Localidade: {cidade_detectada}
+        =================================================
+        Tipo de Protocolo: {ck(tipo_proto, "Ativação")} Ativação {ck(tipo_proto, "Manutenção")} Manutenção
+        =================================================
+        Tipo da Caixa: {ck(tipo_caixa, "1x16")} 1x16 {ck(tipo_caixa, "1x8")} 1x8
+        
+        Problema: {ck(problema, "CTO/porta sem sinal")} CTO/porta sem sinal {txt_p}
+                  {ck(problema, "CTO cheia")} CTO cheia
+                  {ck(problema, "CTO/porta com sinal fora do padrão")} CTO/porta com sinal fora do padrão
+        {txt_obs}
+                  
+        Número da CTO: {num_cto}
+        Sinal da CTO: {sinal_cto}
+        Coordenadas: {coords}
+        =================================================
+        Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
+        
+            st.subheader("📄 Máscara para Copiar")
+            
+            # Substituído st.code por este bloco HTML para visual limpo
+            st.markdown(f"""
+                <div style="
+                    background-color: #161b22; 
+                    padding: 20px; 
+                    border-radius: 10px; 
+                    border: 1px solid #30363d;
+                ">
+                    <p style="
+                        color: #7ee787 !important; 
+                        font-family: 'Courier New', Courier, monospace !important;
+                        font-size: 14px !important;
+                        white-space: pre-wrap !important;
+                        line-height: 1.6 !important;
+                        margin: 0 !important;
+                        background: none !important;
+                    ">{mascara}</p>
+                </div>
+            """, unsafe_allow_html=True)
+        
+            st.write("") # Espaçamento
+        
+            # Botão de Copiar (Mantido)
+            js_copy = json.dumps(mascara)
+            components.html(f"""
+                <button id="cp" style="width:100%; height:45px; background:#4da3ff; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px; font-family:sans-serif;">📋 COPIAR RELATÓRIO</button>
+                <script>
+                document.getElementById('cp').onclick = function() {{
+                    const t = document.createElement("textarea"); t.value = {js_copy}; document.body.appendChild(t);
+                    t.select(); document.execCommand('copy'); document.body.removeChild(t);
+                    this.style.background = '#28a745'; this.innerText = '✅ COPIADO!';
+                    setTimeout(() => {{ this.style.background = '#4da3ff'; this.innerText = '📋 COPIAR RELATÓRIO'; }}, 2000);
+                }}
+                </script>
+            """, height=60)
