@@ -57,7 +57,7 @@ def render():
                 if location:
                     address = location.raw.get('address', {})
                     return address.get('city') or address.get('town') or address.get('village') or ""
-        except: return "Erro na busca"
+        except: return ""
         return ""
 
     def reset_form():
@@ -75,7 +75,7 @@ def render():
     # --- INTERFACE ---
     st.title("📶 Registro de Campo")
     
-    # 1. Linha Superior: Técnico e Protocolo Demanda
+    # Linha Superior
     col_t1, col_t2 = st.columns([1.5, 1])
     with col_t1:
         tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
@@ -84,7 +84,7 @@ def render():
 
     st.markdown("---")
 
-    # 2. BLOCO DE CAMPOS ORGANIZADOS (Exatamente como na Imagem)
+    # Layout de Colunas (Organização das Textboxes)
     col_esquerda, col_direita = st.columns([1.5, 1])
 
     with col_esquerda:
@@ -92,29 +92,23 @@ def render():
         protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
         num_cto = st.text_input("Número da CTO", key="cto_text")
         sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
-        
-        # Problema identificado fica na esquerda, abaixo dos inputs
         st.write(" ")
         problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
 
     with col_direita:
         tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
-        st.write(" ") # Espaçamento para alinhar
+        st.write(" ")
         tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
-        
         coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
+        
         cidade_detectada = buscar_cidade(coords)
         if cidade_detectada:
             st.info(f"📍 Localidade: **{cidade_detectada}**")
             
         sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
-        
-        # Observações agora fica aqui, na direita, fechando o bloco
         observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=110)
 
-    # --- Restante do código (Portas, Botões e Máscara) ---
-
-    # 4. Portas (Aparece se o problema for falta de sinal)
+    # Seleção de Portas
     portas_selecionadas = []
     if problema == "CTO/porta sem sinal":
         st.write("---")
@@ -132,7 +126,7 @@ def render():
 
     st.divider()
 
-    # 5. Botões de Ação
+    # Botões
     c_limpar, c_salvar = st.columns(2)
     with c_limpar:
         st.button("🗑️ Limpar Formulário", on_click=reset_form, use_container_width=True)
@@ -150,12 +144,12 @@ def render():
                         data_reg = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         nova_linha = [data_reg, cidade_detectada, tecnico_selecionado, protocolo, prob_f, protocolo_demanda]
                         aba.append_row(nova_linha)
-                        st.toast("Dados registrados com sucesso!", icon="✅")
+                        st.toast("Dados registrados!", icon="✅")
                         st.balloons()
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")
 
-    # --- MÁSCARA ---
+    # --- MÁSCARA PARA COPIAR (DESIGN LIMPO) ---
     def ck(o_s, o_a): return "(X)" if o_s == o_a else "( )"
     txt_p = f"\n          Portas Afetadas: {', '.join(portas_selecionadas)}" if portas_selecionadas else ""
     txt_obs = f"\nOBSERVAÇÕES: {observacoes}" if observacoes else ""
@@ -181,7 +175,7 @@ Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
 
     st.subheader("📄 Máscara para Copiar")
     
-    # Usamos <pre> para garantir que o navegador trate tudo como texto simples (plaintext)
+    # HTML para remover o fundo tarjado das letras
     st.markdown(f"""
         <div style="
             background-color: #161b22; 
@@ -189,22 +183,22 @@ Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
             border-radius: 10px; 
             border: 1px solid #30363d;
         ">
-            <pre style="
+            <p style="
                 color: #7ee787 !important; 
                 font-family: 'Courier New', Courier, monospace !important;
                 font-size: 14px !important;
                 white-space: pre-wrap !important;
-                word-wrap: break-word !important;
+                line-height: 1.6 !important;
                 margin: 0 !important;
+                background: none !important;
                 background-color: transparent !important;
-                border: none !important;
-            ">{mascara}</pre>
+            ">{mascara}</p>
         </div>
     """, unsafe_allow_html=True)
 
-    st.write("") # Espaçamento simples
-    
-    # Mantenha o seu botão de copiar (JS) logo abaixo
+    st.write("")
+
+    # Botão de Copiar via Componente
     js_copy = json.dumps(mascara)
     components.html(f"""
         <button id="cp" style="width:100%; height:45px; background:#4da3ff; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px; font-family:sans-serif;">📋 COPIAR RELATÓRIO</button>
