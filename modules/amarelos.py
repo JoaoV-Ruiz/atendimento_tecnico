@@ -28,9 +28,9 @@ TABELA_NOMES = {
 # --- FUNÇÕES DE APOIO ---
 def conectar_google_sheets():
     try:
-        creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
+        creds_json = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
         client = gspread.authorize(creds)
         return client.open_by_url(st.secrets["SPREADSHEET_URL"])
     except Exception as e:
