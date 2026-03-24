@@ -180,8 +180,27 @@ Coordenadas: {coords}
 Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
 
     st.subheader("📄 Máscara para Copiar")
-    st.code(mascara, language="text")
+    
+    # EM VEZ DE st.code, USAMOS ESTE CONTAINER PERSONALIZADO:
+    st.markdown(f"""
+        <div style="
+            background-color: #161b22; 
+            color: #7ee787; 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #30363d;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre-wrap;
+            line-height: 1.5;
+            font-size: 14px;
+        ">
+{mascara}
+        </div>
+    """, unsafe_allow_html=True)
 
+    st.write("") # Espaçamento
+
+    # Mantenha o seu botão de copiar (JS) logo abaixo
     js_copy = json.dumps(mascara)
     components.html(f"""
         <button id="cp" style="width:100%; height:45px; background:#4da3ff; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px; font-family:sans-serif;">📋 COPIAR RELATÓRIO</button>
