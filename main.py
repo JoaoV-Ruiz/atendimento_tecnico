@@ -1,9 +1,44 @@
 import streamlit as st
 import pytz
 from datetime import datetime, timedelta
-from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, escrita
 from styles import apply_styles
 
+try:
+    from modules import amarelos
+except Exception as e:
+    st.error(f"Erro ao carregar módulo Amarelos: {e}")
+
+try:
+    from modules import batida_caixa
+except Exception as e:
+    st.error(f"Erro ao carregar módulo Batida de Caixa: {e}")
+
+try:
+    from modules import encerramentos
+except Exception as e:
+    st.error(f"Erro ao carregar módulo Encerramentos: {e}")
+
+try:
+    from modules import portabilidade
+except Exception as e:
+    st.error(f"Erro ao carregar módulo Portabilidade: {e}")
+
+try:
+    from modules import performance
+except Exception as e:
+    st.error(f"Erro ao carregar módulo Performance: {e}")
+
+try:
+    from modules import demandas
+except Exception as e:
+    st.error(f"Erro ao carregar módulo Demandas: {e}")
+
+try:
+    from modules import escrita
+except Exception as e:
+    st.error(f"Erro ao carregar módulo Escrita: {e}")
+
+from styles import apply_styles
 # 1. Configuração da Página
 st.set_page_config(page_title="Sistema Atendimento Técnico", layout="wide", page_icon="📊")
 
