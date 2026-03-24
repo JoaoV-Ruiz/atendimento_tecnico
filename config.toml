@@ -1,0 +1,8 @@
+[theme]
+primaryColor = "#238636"
+backgroundColor = "#0e1117"
+secondaryBackgroundColor = "#161b22"
+textColor = "#ffffff"
+font = "sans serif"
+base = "dark" # Isso aqui força o modo escuro como base padrão
+toolbarMode = "minimal" # Esconde as opções de tema do usuário
