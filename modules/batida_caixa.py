@@ -156,7 +156,7 @@ def render():
                         try:
                             fuso_br = pytz.timezone('America/Sao_Paulo')
                             data_hora = datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M")
-                            linha = [str(data_hora), str(st.session_state.batida_proto), str(st.session_state.batida_tec), str(st.session_state.batida_cx), str(portas_str)]
+                            linha = [str(data_hora), str(st.session_state.batida_proto), str(st.session_state.batida_cx), str(portas_str)]
                             aba.append_row(linha, value_input_option='USER_ENTERED')
                             st.toast("Registrado com sucesso!", icon="✅")
                             st.balloons()
