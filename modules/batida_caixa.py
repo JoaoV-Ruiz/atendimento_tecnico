@@ -29,17 +29,30 @@ def render():
             atualizar_portas()
 
     def conectar_google_sheets():
-        """ Conecta ao Google Sheets e retorna a aba configurada """
         try:
-            creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
+            # 1. Puxa a string do Secret
+            creds_json = st.secrets["GOOGLE_JSON_CREDENTIALS_2"]
+            spreadsheet_url = st.secrets["URL_PLANILHA"]
+    
+            # 2. Transforma a string em dicionário
+            creds_info = json.loads(creds_json)
+    
+            # --- O SEGREDO ESTÁ AQUI ---
+            # Isso converte o texto "\n" em quebras de linha reais que o Google exige
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+            # ---------------------------
+    
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+            
+            # 3. Autentica usando o dicionário corrigido
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             client = gspread.authorize(creds)
-            planilha = client.open_by_url(st.secrets["SPREADSHEET_URL"])
-            return planilha.get_worksheet(0)
-        except Exception as e:
-            st.error(f"Erro na conexão com Google Sheets: {e}")
-            return None
+            
+            return client.open_by_url(spreadsheet_url).get_worksheet(0)
+        
+    except Exception as e:
+        st.error(f"Erro na conexão: {e}")
+        return None
 
     def limpar_campos():
         """ Reseta todos os campos, incrementa versão e recarrega o app """
