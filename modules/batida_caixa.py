@@ -8,6 +8,9 @@ import pytz
 
 def render():
     # Puxa a versão atual do cache para garantir que os widgets resetem visualmente
+    if 'batida_version' not in st.session_state:
+        st.session_state.batida_version = 0
+    
     v = st.session_state.batida_version
 
     # --- 1. FUNÇÕES DE SUPORTE ---
@@ -30,18 +33,17 @@ def render():
 
     def conectar_google_sheets():
         try:
-            # 1. Puxa a string bruta do Secret
-            creds_info = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
-            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+            # 1. Puxa a string bruta do Secret (usando a chave padrão do seu sistema)
+            raw_creds = st.secrets.get("GOOGLE_JSON_CREDENTIALS") or st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
             spreadsheet_url = st.secrets["URL_PLANILHA"]
-    
-            # 2. Converte a string para um dicionário Python
-            creds_info = json.loads(creds_json)
-    
-            # --- A CORREÇÃO MÁGICA ---
-            # Força o Python a transformar o texto "\n" em quebras de linha de verdade
+
+            if not raw_creds:
+                st.error("❌ Erro: Credenciais do Google não encontradas nos Secrets.")
+                return None
+
+            # 2. Converte a string para um dicionário Python e aplica a correção mágica
+            creds_info = json.loads(raw_creds)
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-            # -------------------------
     
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
             
@@ -73,6 +75,19 @@ def render():
             if key.startswith('temp_'):
                 del st.session_state[key]
         st.rerun()
+
+    # --- INICIALIZAÇÃO DE ESTADOS (CASO NÃO EXISTAM) ---
+    defaults = {
+        'batida_proto': "", 'batida_tec': "", 'batida_cx': "", 
+        'anot_batida': "", 'portas': []
+    }
+    for k, val in defaults.items():
+        if k not in st.session_state: st.session_state[k] = val
+    
+    for i in range(16):
+        for pref in ['e_b_', 's_b_', 'id_b_']:
+            if f"{pref}{i}" not in st.session_state: st.session_state[f"{pref}{i}"] = ""
+        if f"c_batida_{i}" not in st.session_state: st.session_state[f"c_batida_{i}"] = False
 
     st.title("📦 BATIDA DE CAIXA 3000")
 
@@ -152,7 +167,7 @@ def render():
             </script>
         """, height=50)
 
-        # --- REGISTRO NO GOOGLE SHEETS COM INSERÇÃO DE NOVA LINHA ---
+        # --- REGISTRO NO GOOGLE SHEETS ---
         if st.button("💾 REGISTRAR NA PLANILHA", use_container_width=True, type="primary"):
             if not st.session_state.batida_proto or not st.session_state.batida_cx:
                 st.error("Protocolo e Caixa são obrigatórios!")
@@ -171,14 +186,13 @@ def render():
                                 str(portas_str)
                             ]
                             
-                            # Força a criação de uma nova linha para evitar sobrescrita
                             aba.append_row(
                                 linha, 
                                 value_input_option='USER_ENTERED',
                                 insert_data_option='INSERT_ROWS'
                             )
                             
-                            st.toast(f"Nova linha registrada com sucesso!", icon="✅")
+                            st.toast(f"Registrado com sucesso!", icon="✅")
                             st.balloons()
                 except Exception as e:
                     st.error(f"Erro ao salvar: {e}")
