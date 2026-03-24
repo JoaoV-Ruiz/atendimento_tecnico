@@ -30,7 +30,7 @@ def render():
     if "problema_key" not in st.session_state: st.session_state["problema_key"] = "CTO/porta sem sinal"
     if "sem_id_key" not in st.session_state: st.session_state["sem_id_key"] = "Não"
 
-    # 2. FUNÇÕES DE SUPORTE (Mantidas)
+    # 2. FUNÇÕES DE SUPORTE
     def conectar_google_sheets():
         try:
             creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS") or st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
@@ -75,7 +75,7 @@ def render():
     # --- INTERFACE ---
     st.title("📶 Registro de Campo")
     
-    # 1. Bloco Superior (Técnico e Protocolo Demanda)
+    # 1. Linha Superior: Técnico e Protocolo Demanda
     col_t1, col_t2 = st.columns([1.5, 1])
     with col_t1:
         tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
@@ -84,34 +84,51 @@ def render():
 
     st.markdown("---")
 
-    # 2. Bloco Central (Lado a Lado como na Imagem 2)
-    col_esquerda, col_direita = st.columns([1.2, 0.8])
-
-    with col_esquerda:
+    # 2. BLOCO DE CAMPOS ORGANIZADOS (Layout Espelhado)
+    # Linha 1: Nome do Cliente | Tipo de Protocolo
+    c1_l1, c2_l1 = st.columns([1.5, 1])
+    with c1_l1:
         nome_cliente = st.text_input("Nome do Cliente", key="nome_text")
+    with c2_l1:
+        st.write(" ") # Ajuste de alinhamento vertical
+        tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
+
+    # Linha 2: Protocolo Solicitação | Tipo da Caixa
+    c1_l2, c2_l2 = st.columns([1.5, 1])
+    with c1_l2:
         protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
+    with c2_l2:
+        st.write(" ")
+        tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
+
+    # Linha 3: Número da CTO | Coordenadas
+    c1_l3, c2_l3 = st.columns([1.5, 1])
+    with c1_l3:
         num_cto = st.text_input("Número da CTO", key="cto_text")
+    with c2_l3:
         coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
 
-    with col_direita:
-        tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
-        tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
+    # Linha 4: Sinal da CTO | Identificação
+    c1_l4, c2_l4 = st.columns([1.5, 1])
+    with c1_l4:
         sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
+    with c2_l4:
+        st.write(" ")
         sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
-        
-        cidade_detectada = buscar_cidade(coords)
-        if cidade_detectada:
-            st.info(f"📍 Localidade: **{cidade_detectada}**")
 
-    # 3. Problema e Observações (Logo abaixo do bloco central)
+    # Exibe localidade detectada
+    cidade_detectada = buscar_cidade(coords)
+    if cidade_detectada:
+        st.info(f"📍 Localidade: **{cidade_detectada}**")
+
     st.markdown("---")
-    c_prob1, c_prob2 = st.columns([1, 1.5]) # Divide o espaço entre rádio e texto
-    with c_prob1:
-        problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
-    with c_prob2:
-        observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=110)
 
-    # 4. Portas (Aparece condicionalmente)
+    # 3. Problema e Observações
+    # Rádio de Problema em uma linha e Observações em outra para manter a clareza
+    problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
+    observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=80)
+
+    # 4. Portas (Aparece se o problema for falta de sinal)
     portas_selecionadas = []
     if problema == "CTO/porta sem sinal":
         st.write("---")
@@ -127,7 +144,7 @@ def render():
                     if st.checkbox(f"P{i}", key=f"p_{i}"):
                         portas_selecionadas.append(str(i))
 
-    st.markdown("---")
+    st.divider()
 
     # 5. Botões de Ação
     c_limpar, c_salvar = st.columns(2)
