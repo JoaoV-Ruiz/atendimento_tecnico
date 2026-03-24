@@ -84,49 +84,35 @@ def render():
 
     st.markdown("---")
 
-    # 2. BLOCO DE CAMPOS ORGANIZADOS (Layout Espelhado)
-    # Linha 1: Nome do Cliente | Tipo de Protocolo
-    c1_l1, c2_l1 = st.columns([1.5, 1])
-    with c1_l1:
+    # 2. BLOCO DE CAMPOS ORGANIZADOS (Exatamente como na Imagem)
+    col_esquerda, col_direita = st.columns([1.5, 1])
+
+    with col_esquerda:
         nome_cliente = st.text_input("Nome do Cliente", key="nome_text")
-    with c2_l1:
-        st.write(" ") # Ajuste de alinhamento vertical
-        tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
-
-    # Linha 2: Protocolo Solicitação | Tipo da Caixa
-    c1_l2, c2_l2 = st.columns([1.5, 1])
-    with c1_l2:
         protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
-    with c2_l2:
-        st.write(" ")
-        tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
-
-    # Linha 3: Número da CTO | Coordenadas
-    c1_l3, c2_l3 = st.columns([1.5, 1])
-    with c1_l3:
         num_cto = st.text_input("Número da CTO", key="cto_text")
-    with c2_l3:
-        coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
-
-    # Linha 4: Sinal da CTO | Identificação
-    c1_l4, c2_l4 = st.columns([1.5, 1])
-    with c1_l4:
         sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
-    with c2_l4:
+        
+        # Problema identificado fica na esquerda, abaixo dos inputs
         st.write(" ")
+        problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
+
+    with col_direita:
+        tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
+        st.write(" ") # Espaçamento para alinhar
+        tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
+        
+        coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
+        cidade_detectada = buscar_cidade(coords)
+        if cidade_detectada:
+            st.info(f"📍 Localidade: **{cidade_detectada}**")
+            
         sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
+        
+        # Observações agora fica aqui, na direita, fechando o bloco
+        observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=110)
 
-    # Exibe localidade detectada
-    cidade_detectada = buscar_cidade(coords)
-    if cidade_detectada:
-        st.info(f"📍 Localidade: **{cidade_detectada}**")
-
-    st.markdown("---")
-
-    # 3. Problema e Observações
-    # Rádio de Problema em uma linha e Observações em outra para manter a clareza
-    problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
-    observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=80)
+    # --- Restante do código (Portas, Botões e Máscara) ---
 
     # 4. Portas (Aparece se o problema for falta de sinal)
     portas_selecionadas = []
