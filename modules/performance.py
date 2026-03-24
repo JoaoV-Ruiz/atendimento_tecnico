@@ -128,71 +128,109 @@ def analisar_dados_encerramentos(caminho_csv, mes, ano):
 @st.cache_data(ttl=900, show_spinner="🤖 Sincronizando com ERP...")
 def disparar_automacao_erp(download_path_obj, mes, ano):
     chrome_options = Options()
-    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--headless=new") # Headless mais moderno
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu") # Importante para servidores Linux
     chrome_options.add_argument("--window-size=1920,1080")
+    
+    # Impede que o Chrome use muita memória RAM (evita o crash da Stacktrace)
+    chrome_options.add_argument("--js-flags='--max-old-space-size=512'") 
 
     def forcar_input_react(driver, elemento, valor):
         script = "var element = arguments[0]; var value = arguments[1]; var lastValue = element.value; element.value = value; var event = new Event('input', { bubbles: true }); var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); } element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));"
         driver.execute_script(script, elemento, valor)
 
-    # Limpeza da pasta
+    # Limpeza da pasta de downloads
     for f in glob.glob(os.path.join(str(download_path_obj), "*")):
         try: os.remove(f)
         except: pass
 
-    prefs = {"download.default_directory": str(download_path_obj.absolute())}
+    prefs = {
+        "download.default_directory": str(download_path_obj.absolute()),
+        "download.prompt_for_download": False,
+        "download.directory_upgrade": True,
+        "safebrowsing.enabled": True
+    }
     chrome_options.add_experimental_option("prefs", prefs)
     
     driver = webdriver.Chrome(options=chrome_options)
     try:
         driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": str(download_path_obj.absolute())})
-        wait = WebDriverWait(driver, 40) 
+        wait = WebDriverWait(driver, 35) # Aumentado para dar fôlego ao servidor
 
+        # 1. Login com verificação
         driver.get("https://erp.osirnet.com.br/all_solicitations#/")
+        
         try:
-            user_field = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
+            # Verifica se caiu na tela de login
+            user_field = wait.until(EC.presence_of_element_located((By.ID, ":r0:")))
             user_field.send_keys(st.secrets["ERP_USER"])
             driver.find_element(By.ID, ":r1:").send_keys(st.secrets["ERP_PASS"])
             driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
-            time.sleep(5)
-        except: pass
+            time.sleep(5) # Espera o redirecionamento
+        except Exception:
+            # Se não achou o campo de login, talvez já esteja logado ou a página mudou
+            pass
         
+        # 2. Navegação para a URL de solicitações
         driver.get("https://erp.osirnet.com.br/all_solicitations#/")
-        time.sleep(3)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
+        
+        # 3. Filtros (Aqui é onde o erro costuma acontecer)
+        # Tenta clicar no filtro avançado com JS caso o Selenium se perca
+        btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']")))
+        driver.execute_script("arguments[0].click();", btn_filtro)
         time.sleep(3)
 
-        driver.find_element(By.ID, "teamId").click()
+        # Seleção da Equipe
+        wait.until(EC.element_to_be_clickable((By.ID, "teamId"))).click()
         time.sleep(1)
-        f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+        f_all = wait.until(EC.presence_of_element_located((By.ID, "filterAll")))
         f_all.send_keys("COP Encerramentos")
         f_all.send_keys(Keys.ENTER)
-        time.sleep(3)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
+        
+        # Clica na equipe na lista
+        equipe_item = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
+        driver.execute_script("arguments[0].click();", equipe_item)
         time.sleep(1)
+        
         driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
 
+        # 4. Data
         hj = datetime.now()
-        fim = hj.replace(day=calendar.monthrange(hj.year, hj.month)[1]).strftime("%d/%m/%Y")
-        forcar_input_react(driver, driver.find_element(By.ID, "finalReportClosingDate"), fim)
-        time.sleep(2)
-        driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-        time.sleep(8)
+        # Pega o último dia do mês atual
+        ultimo_dia = calendar.monthrange(hj.year, hj.month)[1]
+        data_fim = f"{ultimo_dia:02d}/{hj.month:02d}/{hj.year}"
         
+        campo_data = wait.until(EC.presence_of_element_located((By.ID, "finalReportClosingDate")))
+        forcar_input_react(driver, campo_data, data_fim)
+        time.sleep(2)
+        
+        driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
+        time.sleep(10) # Tempo para processar a lista pesada
+        
+        # 5. Exportação
         btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
         driver.execute_script("arguments[0].click();", btn_exp)
+        
         wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
         
-        time.sleep(10)
-        arquivos = glob.glob(os.path.join(str(download_path_obj), "*.csv"))
-        if arquivos:
-            caminho_final = max(arquivos, key=os.path.getmtime)
+        # Aguarda o download de forma inteligente
+        caminho_final = None
+        for _ in range(20):
+            arquivos = glob.glob(os.path.join(str(download_path_obj), "*.csv"))
+            if arquivos:
+                caminho_final = max(arquivos, key=os.path.getmtime)
+                break
+            time.sleep(2)
+            
+        if caminho_final:
             return analisar_dados_encerramentos(caminho_final, mes, ano)
         return None
+
     except Exception as e:
-        st.error(f"❌ Erro na automação ERP: {str(e)}")
+        # Aqui capturamos o erro real antes da Stacktrace
+        st.error(f"❌ Erro detalhado na automação: {str(e)}")
         return None
     finally:
         driver.quit()
