@@ -34,7 +34,7 @@ def render():
     def conectar_google_sheets():
         try:
             # 1. Puxa a string bruta do Secret (usando a chave padrão do seu sistema)
-            raw_creds = st.secrets.get("GOOGLE_JSON_CREDENTIALS")
+            raw_creds = st.secrets.get["GOOGLE_JSON_CREDENTIALS"]
             spreadsheet_url = st.secrets["URL_PLANILHA"]
 
             if not raw_creds:
