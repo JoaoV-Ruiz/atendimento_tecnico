@@ -1,7 +1,7 @@
 import streamlit as st
 import pytz
 from datetime import datetime, timedelta
-from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas
+from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, escrita
 from styles import apply_styles
 
 # 1. Configuração da Página
@@ -60,7 +60,7 @@ if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
 st.sidebar.title("🚀 Menu Principal")
 escolha = st.sidebar.radio(
     "Selecione a ferramenta:", 
-    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra"]
+    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra", "🎙️ BOT para escrita"]
 )
 
 st.sidebar.divider()
@@ -78,3 +78,5 @@ elif escolha == "📈 Performance TME":
     performance.render()
 elif escolha == "🚧 Demanda Infra":
     demandas.render()
+elif escolha == "🎙️ BOT para escrita":
+    escrita.render()
