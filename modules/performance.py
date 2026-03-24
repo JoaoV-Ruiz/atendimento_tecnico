@@ -64,27 +64,37 @@ def formatar_segundos(segundos):
 
 @st.cache_data(ttl=600)
 def load_technical_data():
-    url = st.secrets.get("SPREADSHEET_URL")
-    creds_json_str = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
+    # Busca segura das chaves (sem espaços extras no nome)
+    url = st.secrets.get("SPREADSHEET_URL") or st.secrets.get("URL_PLANILHA")
+    creds_json_str = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
     
     if not url or not creds_json_str:
         st.error("❌ Credenciais não encontradas nos Secrets.")
         return None
+
     try:
         creds_dict = json.loads(creds_json_str)
-        # CORREÇÃO CRÍTICA DO PEM FILE
+        
+        # --- TRATAMENTO ANTI-ERRO DE PADDING E PEM ---
         if "private_key" in creds_dict:
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+            key = creds_dict["private_key"]
+            # Limpa espaços nas pontas e garante que \n seja quebra de linha real
+            key = key.strip().replace("\\n", "\n")
+            creds_dict["private_key"] = key
             
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
         
+        # Abre a planilha limpando a URL de espaços invisíveis
         spreadsheet = client.open_by_url(url.strip())
         sheet = spreadsheet.worksheet("AtendimentoTécnico")
         return sheet.get("A8:AF20")
+        
     except Exception as e:
         st.error(f"❌ Erro Planilha Performance: {e}")
+        with st.expander("Log de Diagnóstico"):
+            st.code(traceback.format_exc())
         return None
 
 def analisar_dados_encerramentos(caminho_csv, mes, ano):
