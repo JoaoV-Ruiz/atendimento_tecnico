@@ -13,7 +13,7 @@ def conectar_google_sheets():
         # 1. Busca os Secrets (Tenta a chave 1 ou a chave 2 caso você tenha renomeado)
         raw_creds = st.secrets.get("GOOGLE_JSON_CREDENTIALS") or st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
         spreadsheet_url = st.secrets.get("URL_PLANILHA")
-
+        
         if not raw_creds:
             st.error("❌ Erro: Credenciais do Google não encontradas nos Secrets.")
             return None
@@ -23,6 +23,7 @@ def conectar_google_sheets():
 
         # 2. Carrega e limpa a chave privada (Crucial para evitar Invalid JWT Signature)
         creds_info = json.loads(raw_creds)
+        st.write(f"DEBUG: O e-mail que está tentando acessar é: {creds_info.get('client_email')}")
         if "private_key" in creds_info:
             creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
         
