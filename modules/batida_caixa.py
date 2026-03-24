@@ -50,9 +50,9 @@ def render():
             
             return client.open_by_url(spreadsheet_url).get_worksheet(0)
         
-    except Exception as e:
-        st.error(f"Erro na conexão: {e}")
-        return None
+        except Exception as e:
+            st.error(f"Erro na conexão: {e}")
+            return None
 
     def limpar_campos():
         """ Reseta todos os campos, incrementa versão e recarrega o app """
