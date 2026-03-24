@@ -173,32 +173,9 @@ Coordenadas: {coords}
 =================================================
 Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
 
-    st.subheader("📄 Máscara para Copiar")
-    
-    # HTML para remover o fundo tarjado das letras
-    st.markdown(f"""
-        <div style="
-            background-color: #161b22; 
-            padding: 20px; 
-            border-radius: 10px; 
-            border: 1px solid #30363d;
-        ">
-            <p style="
-                color: #7ee787 !important; 
-                font-family: 'Courier New', Courier, monospace !important;
-                font-size: 14px !important;
-                white-space: pre-wrap !important;
-                line-height: 1.6 !important;
-                margin: 0 !important;
-                background: none !important;
-                background-color: transparent !important;
-            ">{mascara}</p>
-        </div>
-    """, unsafe_allow_html=True)
+   st.subheader("📄 Máscara para Copiar")
+    st.code(mascara, language="text")
 
-    st.write("")
-
-    # Botão de Copiar via Componente
     js_copy = json.dumps(mascara)
     components.html(f"""
         <button id="cp" style="width:100%; height:45px; background:#4da3ff; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:bold; font-size:16px; font-family:sans-serif;">📋 COPIAR RELATÓRIO</button>
