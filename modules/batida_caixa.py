@@ -33,24 +33,29 @@ def render():
 
     def conectar_google_sheets():
         try:
-            # 1. Puxa a string bruta do Secret (usando a chave padrão do seu sistema)
-            raw_creds = st.secrets.get["GOOGLE_JSON_CREDENTIALS"]
-            spreadsheet_url = st.secrets["URL_PLANILHA"]
+            # 1. Puxa a string bruta do Secret usando a forma correta
+            # Você pode usar st.secrets["CHAVE"] ou st.secrets.get("CHAVE")
+            raw_creds = st.secrets.get("GOOGLE_JSON_CREDENTIALS")
+            spreadsheet_url = st.secrets.get("URL_PLANILHA")
 
             if not raw_creds:
                 st.error("❌ Erro: Credenciais do Google não encontradas nos Secrets.")
                 return None
 
-            # 2. Converte a string para um dicionário Python e aplica a correção mágica
+            # 2. Converte a string para um dicionário Python e aplica a correção da chave privada
             creds_info = json.loads(raw_creds)
-            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+            
+            # Garante que as quebras de linha sejam interpretadas corretamente
+            if "private_key" in creds_info:
+                creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
     
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
             
-            # 3. Autentica usando o dicionário corrigido
+            # 3. Autentica
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             client = gspread.authorize(creds)
             
+            # 4. Abre a planilha e retorna a primeira aba
             return client.open_by_url(spreadsheet_url).get_worksheet(0)
             
         except Exception as e:
