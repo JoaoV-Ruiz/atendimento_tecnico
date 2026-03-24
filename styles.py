@@ -15,30 +15,45 @@ def apply_styles():
             border-right: 1px solid #30363d;
         }
 
-        /* 3. BLINDAGEM DOS INPUTS (PONTO 2 - ANTI-FUNDO BRANCO) */
-        /* Atacamos a estrutura interna 'Base Web' do Streamlit */
-        [data-baseweb="base-input"], [data-baseweb="input"], [data-baseweb="textarea"] {
+        /* 3. BLINDAGEM TOTAL DOS INPUTS (IGUAL AO BATIDA DE CAIXA) */
+        
+        /* Força o fundo escuro em repouso, no hover e no foco */
+        div[data-baseweb="input"], 
+        div[data-baseweb="base-input"], 
+        div[data-baseweb="textarea"],
+        .stTextInput div[data-baseweb="input"],
+        .stTextArea div[data-baseweb="textarea"] {
             background-color: #1d2129 !important;
             border-radius: 6px !important;
-        }
-
-        .stTextInput input, .stTextArea textarea {
-            background-color: #1d2129 !important;
-            color: #ffffff !important;
-            -webkit-text-fill-color: #ffffff !important; /* Força cor branca no Chrome/Edge */
-            box-shadow: none !important;
             border: 1px solid #444c56 !important;
-            border-radius: 6px !important;
         }
 
-        /* Ajuste de Hover e Foco (Evita que o fundo mude para branco ao clicar) */
-        [data-baseweb="base-input"]:hover, 
-        [data-baseweb="input"]:focus-within,
-        .stTextInput input:focus, 
-        .stTextArea textarea:focus {
+        /* Garante que o campo de texto interno seja transparente para mostrar o fundo acima */
+        .stTextInput input, .stTextArea textarea {
+            background-color: transparent !important;
+            color: #ffffff !important;
+            -webkit-text-fill-color: #ffffff !important;
+            border: none !important; /* A borda agora é controlada pela div pai */
+            box-shadow: none !important;
+        }
+
+        /* Ajuste para o estado de HOVER (Passar o mouse) */
+        div[data-baseweb="input"]:hover, 
+        div[data-baseweb="base-input"]:hover {
+            border-color: #8b949e !important;
+        }
+
+        /* Ajuste para o estado de FOCO (Clicado) */
+        div[data-baseweb="input"]:focus-within, 
+        div[data-baseweb="base-input"]:focus-within {
             background-color: #0d1117 !important;
             border-color: #58a6ff !important;
-            color: #ffffff !important;
+        }
+
+        /* Placeholder (Texto de exemplo) */
+        ::placeholder {
+            color: #484f58 !important;
+            -webkit-text-fill-color: #484f58 !important;
         }
 
         /* 4. LABELS (NOMES DOS CAMPOS) */
