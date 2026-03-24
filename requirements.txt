@@ -10,5 +10,3 @@ openpyxl
 pytz
 geopy
 SpeechRecognition
-PyAudio
-tempfile
