@@ -19,7 +19,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from streamlit_autorefresh import st_autorefresh
 from pathlib import Path
-from styles import apply_styles
+
 
 # --- 1. MAPEAMENTO DE NOMES ---
 MAPEAMENTO_TECNICOS = {
@@ -202,6 +202,7 @@ def disparar_automacao_erp(download_path_obj, mes, ano):
 
 # --- 3. INTERFACE PRINCIPAL ---
 def render():
+    from styles import apply_styles  # Importe aqui dentro
     apply_styles()
     st_autorefresh(interval=10 * 60 * 1000, key="refresh_perf_unificada")
     
