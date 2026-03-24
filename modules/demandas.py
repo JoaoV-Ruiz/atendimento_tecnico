@@ -18,7 +18,7 @@ LISTA_TECNICOS = [
 
 def render():
     apply_styles()
-
+    
     # 1. INICIALIZAÇÃO DE ESTADOS
     chaves_texto = ["nome_text", "prot_text", "prot_demanda_text", "cto_text", "sinal_text", "coords_text", "obs_text"]
     for key in chaves_texto:
@@ -30,17 +30,15 @@ def render():
     if "problema_key" not in st.session_state: st.session_state["problema_key"] = "CTO/porta sem sinal"
     if "sem_id_key" not in st.session_state: st.session_state["sem_id_key"] = "Não"
 
-    # 2. FUNÇÕES DE SUPORTE
+    # 2. FUNÇÕES DE SUPORTE (Mantidas)
     def conectar_google_sheets():
         try:
             creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS") or st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
             spreadsheet_url = st.secrets.get("URL_PLANILHA_DEMANDA")
             if not creds_json or not spreadsheet_url: return None
-            
             creds_info = json.loads(creds_json)
             if "private_key" in creds_info:
                 creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-            
             scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
             creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
             return gspread.authorize(creds).open_by_url(spreadsheet_url.strip()).get_worksheet(0)
@@ -77,44 +75,43 @@ def render():
     # --- INTERFACE ---
     st.title("📶 Registro de Campo")
     
-    # Seção Superior: Técnico e Demanda
-    with st.container():
-        c_t1, c_t2 = st.columns([1.5, 1])
-        with c_t1:
-            tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
-        with c_t2:
-            protocolo_demanda = st.text_input("Protocolo da Demanda", key="prot_demanda_text")
+    # 1. Bloco Superior (Técnico e Protocolo Demanda)
+    col_t1, col_t2 = st.columns([1.5, 1])
+    with col_t1:
+        tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
+    with col_t2:
+        protocolo_demanda = st.text_input("Protocolo da Demanda", key="prot_demanda_text")
 
     st.markdown("---")
 
-    # Bloco de Dados do Cliente e CTO
-    with st.container():
-        col_a, col_b = st.columns(2)
-        
-        with col_a:
-            nome_cliente = st.text_input("Nome do Cliente", key="nome_text")
-            protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
-            num_cto = st.text_input("Número da CTO", key="cto_text")
-            sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
-        
-        with col_b:
-            tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
-            tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
-            coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
-            sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
-            
-            cidade_detectada = buscar_cidade(coords)
-            if cidade_detectada:
-                st.info(f"📍 Localidade: **{cidade_detectada}**")
+    # 2. Bloco Central (Lado a Lado como na Imagem 2)
+    col_esquerda, col_direita = st.columns([1.2, 0.8])
 
-    # Problema e Observações
-    st.write(" ")
-    problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
-    
-    # NOVO CAMPO: OBSERVAÇÕES
-    observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=100, placeholder="Detalhes extras sobre a situação encontrada...")
+    with col_esquerda:
+        nome_cliente = st.text_input("Nome do Cliente", key="nome_text")
+        protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
+        num_cto = st.text_input("Número da CTO", key="cto_text")
+        coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
 
-    # Seleção de Portas
+    with col_direita:
+        tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
+        tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
+        sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
+        sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
+        
+        cidade_detectada = buscar_cidade(coords)
+        if cidade_detectada:
+            st.info(f"📍 Localidade: **{cidade_detectada}**")
+
+    # 3. Problema e Observações (Logo abaixo do bloco central)
+    st.markdown("---")
+    c_prob1, c_prob2 = st.columns([1, 1.5]) # Divide o espaço entre rádio e texto
+    with c_prob1:
+        problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
+    with c_prob2:
+        observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=110)
+
+    # 4. Portas (Aparece condicionalmente)
     portas_selecionadas = []
     if problema == "CTO/porta sem sinal":
         st.write("---")
@@ -130,13 +127,12 @@ def render():
                     if st.checkbox(f"P{i}", key=f"p_{i}"):
                         portas_selecionadas.append(str(i))
 
-    st.divider()
+    st.markdown("---")
 
-    # Botões
+    # 5. Botões de Ação
     c_limpar, c_salvar = st.columns(2)
     with c_limpar:
         st.button("🗑️ Limpar Formulário", on_click=reset_form, use_container_width=True)
-
     with c_salvar:
         if st.button("💾 Salvar na Planilha", type="primary", use_container_width=True):
             if tecnico_selecionado == " " or not nome_cliente:
@@ -148,7 +144,6 @@ def render():
                         detalhes_p = f" (Portas: {', '.join(portas_selecionadas)})" if portas_selecionadas else ""
                         obs_final = f" | OBS: {observacoes}" if observacoes else ""
                         prob_f = problema + detalhes_p + obs_final
-                        
                         data_reg = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                         nova_linha = [data_reg, cidade_detectada, tecnico_selecionado, protocolo, prob_f, protocolo_demanda]
                         aba.append_row(nova_linha)
