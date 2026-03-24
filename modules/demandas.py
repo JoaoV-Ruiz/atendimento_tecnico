@@ -202,8 +202,8 @@ Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
         </div>
     """, unsafe_allow_html=True)
 
-    st.write("") # Espaçamento
-
+    st.write("") # Espaçamento simples
+    
     # Mantenha o seu botão de copiar (JS) logo abaixo
     js_copy = json.dumps(mascara)
     components.html(f"""
