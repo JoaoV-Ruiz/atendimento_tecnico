@@ -31,7 +31,7 @@ def render():
     def conectar_google_sheets():
         try:
             # 1. Puxa a string bruta do Secret
-            creds_json = st.secrets["GOOGLE_JSON_CREDENTIALS"]
+            creds_json = st.secrets["GOOGLE_JSON_CREDENTIALS_2"]
             spreadsheet_url = st.secrets["URL_PLANILHA"]
     
             # 2. Converte a string para um dicionário Python
