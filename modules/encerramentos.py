@@ -42,8 +42,8 @@ def render():
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    URL_ERP = "https://erp.osirnet.com.br/all_solicitations#/"
-
+    URL_ERP = st.secrets["URL_ERP"]
+    
     # --- 2. FUNÇÕES DE APOIO ---
     def super_limpeza(texto):
         if not isinstance(texto, str): return ""
