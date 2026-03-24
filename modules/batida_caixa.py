@@ -28,31 +28,31 @@ def render():
             st.session_state[f"c_batida_{indice}"] = st.session_state[key_temp]
             atualizar_portas()
 
-   def conectar_google_sheets():
-    try:
-        # 1. Puxa a string bruta do Secret
-        creds_json = st.secrets["GOOGLE_JSON_CREDENTIALS"]
-        spreadsheet_url = st.secrets["URL_PLANILHA"]
-
-        # 2. Converte a string para um dicionário Python
-        creds_info = json.loads(creds_json)
-
-        # --- A CORREÇÃO MÁGICA ---
-        # Força o Python a transformar o texto "\n" em quebras de linha de verdade
-        creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-        # -------------------------
-
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        
-        # 3. Autentica usando o dicionário corrigido
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-        client = gspread.authorize(creds)
-        
-        return client.open_by_url(spreadsheet_url).get_worksheet(0)
-        
-    except Exception as e:
-        st.error(f"❌ Erro na conexão: {e}")
-        return None
+       def conectar_google_sheets():
+        try:
+            # 1. Puxa a string bruta do Secret
+            creds_json = st.secrets["GOOGLE_JSON_CREDENTIALS"]
+            spreadsheet_url = st.secrets["URL_PLANILHA"]
+    
+            # 2. Converte a string para um dicionário Python
+            creds_info = json.loads(creds_json)
+    
+            # --- A CORREÇÃO MÁGICA ---
+            # Força o Python a transformar o texto "\n" em quebras de linha de verdade
+            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
+            # -------------------------
+    
+            scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+            
+            # 3. Autentica usando o dicionário corrigido
+            creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
+            client = gspread.authorize(creds)
+            
+            return client.open_by_url(spreadsheet_url).get_worksheet(0)
+            
+        except Exception as e:
+            st.error(f"❌ Erro na conexão: {e}")
+            return None
 
     def limpar_campos():
         """ Reseta todos os campos, incrementa versão e recarrega o app """
