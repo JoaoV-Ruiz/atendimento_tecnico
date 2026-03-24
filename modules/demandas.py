@@ -18,21 +18,6 @@ LISTA_TECNICOS = [
 
 def render():
     apply_styles()
-    
-    # CSS para forçar o visual limpo e cores de input do sistema
-    st.markdown("""
-        <style>
-        .stTextInput input, .stSelectbox div[data-baseweb="select"], .stTextArea textarea {
-            background-color: #f0f2f6 !important;
-        }
-        div[data-testid="stVerticalBlock"] > div:has(div.stRadio) {
-            background-color: #f8f9fa;
-            padding: 10px 15px;
-            border-radius: 10px;
-            border: 1px solid #eee;
-        }
-        </style>
-    """, unsafe_allow_html=True)
 
     # 1. INICIALIZAÇÃO DE ESTADOS
     chaves_texto = ["nome_text", "prot_text", "prot_demanda_text", "cto_text", "sinal_text", "coords_text", "obs_text"]
