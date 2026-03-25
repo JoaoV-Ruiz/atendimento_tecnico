@@ -35,17 +35,43 @@ def apply_styles():
             box-shadow: 0 0 0 1px #58a6ff !important;
         }
 
-        /* RADIO BUTTONS (ESTILO DA FOTO - SELEÇÃO VERMELHA) */
+        /* --- AJUSTE DOS COMPONENTES DE SELEÇÃO --- */
+
+        /* RADIO BUTTONS (REDONDOS) */
+        /* Estilo base */
         div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
             background-color: #161b22 !important;
             border-color: #30363d !important;
         }
 
-        div[data-testid="stRadio"] [data-baseweb="radio"][aria-checked="true"] div:first-child {
+        /* Quando checado (fundo vermelho) */
+        div[data-testid="stRadio"] [aria-checked="true"] div:first-child {
+            background-color: #ff4b4b !important;
+            border-color: #ff4b4b !important;
+        }
+
+        /* Forçar o ponto branco central no Radio */
+        div[data-testid="stRadio"] [aria-checked="true"] div:first-child::after {
+            content: "";
+            width: 6px;
+            height: 6px;
+            background-color: white !important;
+            border-radius: 50%;
+            display: block;
+        }
+
+        /* CHECKBOXES (QUADRADOS) */
+        div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
+            background-color: #161b22 !important;
+            border-color: #30363d !important;
+        }
+
+        div[data-testid="stCheckbox"] [aria-checked="true"] div:first-child {
             background-color: #ff4b4b !important;
             border-color: #ff4b4b !important;
         }
         
+        /* Espaçamento entre as opções */
         div[data-testid="stRadio"] div[role="radiogroup"] {
             gap: 20px !important;
         }
@@ -79,3 +105,13 @@ def apply_styles():
         }
         </style>
     """, unsafe_allow_html=True)
+
+# Chamada da função para testar
+apply_styles()
+
+# Exemplos para visualização
+st.title("Teste de Estilo")
+st.radio("Escolha uma opção (Redonda):", ["Opção A", "Opção B", "Opção C"])
+st.checkbox("Marque esta opção (Quadrada)")
+st.text_input("Campo de texto", placeholder="Digite algo...")
+st.button("Botão Primário", kind="primary")
