@@ -19,7 +19,7 @@ def apply_styles():
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* INPUTS */
+        /* INPUTS GERAIS */
         div[data-baseweb="input"], 
         div[data-baseweb="base-input"], 
         div[data-baseweb="select"] > div,
@@ -29,43 +29,40 @@ def apply_styles():
             border-radius: 8px !important;
         }
 
-        /* RADIO BUTTONS (REDONDOS) */
-        /* Estilo da bolinha desmarcada */
-        div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
+        /* --- DESIGN UNIFICADO: RADIO E CHECKBOX --- */
+        
+        /* 1. Estilo da Caixa (Desmarcada) */
+        div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child,
+        div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
             background-color: #161b22 !important;
-            border-color: #30363d !important;
+            border: 1px solid #30363d !important;
+            border-radius: 4px !important; /* Deixa o Radio quadrado/levemente arredondado como o checkbox */
         }
 
-        /* Quando checado (fundo vermelho) */
-        div[data-testid="stRadio"] [aria-checked="true"] div:first-child {
-            background-color: #1b6e26 !important;
+        /* 2. Estilo da Caixa (Quando Marcada) */
+        div[data-testid="stRadio"] [aria-checked="true"] div:first-child,
+        div[data-testid="stCheckbox"] [aria-checked="true"] div:first-child {
+            background-color: #ff4b4b !important;
             border-color: #ff4b4b !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
         }
 
-        /* O ponto branco central do Radio */
+        /* 3. O "Check" ou "Ponto" interno */
+        /* Para o Radio parecer um Checkbox marcado, vamos usar um ícone ou ponto central */
         div[data-testid="stRadio"] [aria-checked="true"] div:first-child::after {
-            content: "" !important;
-            width: 8px !important;
-            height: 8px !important;
-            background-color: white !important;
-            border-radius: 50% !important;
-            display: block !important;
+            content: "✓" !important; /* Adiciona um check no rádio também */
+            color: white !important;
+            font-size: 10px !important;
+            font-weight: bold !important;
         }
 
-        /* CHECKBOXES (QUADRADOS) */
-        div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
-            background-color: #161b22 !important;
-            border-color: #30363d !important;
+        /* Remove o círculo interno padrão do Radio que o Streamlit tenta colocar */
+        div[data-testid="stRadio"] [aria-checked="true"] div:first-child div {
+            display: none !important;
         }
 
-        div[data-testid="stCheckbox"] [aria-checked="true"] div:first-child {
-            background-color: #ff4b4b !important;
-            border-color: #ff4b4b !important;
-        }
-        
         /* BOTÕES */
         button[kind="primary"] {
             background-color: #238636 !important;
