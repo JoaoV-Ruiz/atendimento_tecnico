@@ -9,22 +9,16 @@ def apply_styles():
             color: #c9d1d9 !important;
         }
 
-        /* 2. RESET GLOBAL: garante que nenhum <p> dentro de label/radio/checkbox
-              herde fundo indevido — cobre o caso exato visto no DevTools */
+        /* 2. ZERO O FUNDO de qualquer <p> ou <span> dentro de labels/widgets
+              SEM tocar em display, width, height ou qualquer propriedade de layout */
         label p,
         label span,
         [data-baseweb="radio"] p,
         [data-baseweb="radio"] span,
         [data-baseweb="checkbox"] p,
-        [data-baseweb="checkbox"] span,
-        [data-testid="stMarkdownContainer"] p {
+        [data-baseweb="checkbox"] span {
             background-color: transparent !important;
             background: transparent !important;
-            color: #ffffff !important;
-            display: block !important;  /* sem inline-block que causava o recorte */
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
         }
 
         /* 3. RADIOS */
@@ -41,12 +35,7 @@ def apply_styles():
             border-color: #ff4b4b !important;
         }
 
-        /* 4. CHECKBOXES - só a caixinha recebe cor de fundo */
-        div[data-testid="stCheckbox"],
-        div[data-testid="stCheckbox"] *  {
-            background-color: transparent !important;
-            background: transparent !important;
-        }
+        /* 4. CHECKBOXES */
         div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
             background-color: #1d2129 !important;
             border: 1px solid #444c56 !important;
