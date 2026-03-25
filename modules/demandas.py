@@ -89,7 +89,7 @@ def render():
     with c1:
         nome_cliente = st.text_input("Nome do Cliente", key="nome_text")
     with c2:
-        st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
+        # REMOVIDO: st.markdown de espaçamento — margin-top agora vem do CSS
         tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
 
     # Linha 2: Protocolo Solicitação | Tipo Caixa
@@ -97,7 +97,7 @@ def render():
     with c3:
         protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
     with c4:
-        st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
+        # REMOVIDO: st.markdown de espaçamento
         tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
 
     # Linha 3: Número CTO | Coordenadas
@@ -112,7 +112,7 @@ def render():
     with c7:
         sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
     with c8:
-        st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
+        # REMOVIDO: st.markdown de espaçamento
         sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
 
     cidade_detectada = buscar_cidade(coords)
