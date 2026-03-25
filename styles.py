@@ -3,59 +3,79 @@ import streamlit as st
 def apply_styles():
     st.markdown("""
         <style>
-        /* 1. FUNDO E ESTRUTURA GERAL */
+        /* FUNDO E TEXTO GLOBAL */
         [data-testid="stAppViewContainer"] {
             background-color: #0d1117 !important;
             color: #c9d1d9 !important;
         }
-
-        /* 2. RADIOS - empurra levemente para baixo sem usar st.markdown de espaço */
-        div[data-testid="stRadio"] {
-            margin-top: 6px !important;
-        }
-        div[data-testid="stRadio"] [data-baseweb="radio"] {
-            background-color: transparent !important;
-            margin-bottom: 4px !important;
-        }
-        div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
-            background-color: #1d2129 !important;
-            border: 1px solid #444c56 !important;
-        }
-        div[data-testid="stRadio"] [data-baseweb="radio"][aria-checked="true"] div:first-child {
-            background-color: #ff4b4b !important;
-            border-color: #ff4b4b !important;
+        
+        [data-testid="stHeader"] {
+            background-color: rgba(0,0,0,0) !important;
         }
 
-        /* 3. CHECKBOXES */
-        div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
-            background-color: #1d2129 !important;
-            border: 1px solid #444c56 !important;
-            border-radius: 4px !important;
-        }
-        div[data-testid="stCheckbox"] [data-baseweb="checkbox"][aria-checked="true"] div:first-child {
-            background-color: #ff4b4b !important;
-            border-color: #ff4b4b !important;
+        /* TÍTULOS E LABELS */
+        h1, h2, h3, .stWidgetLabel p, label {
+            color: #ffffff !important;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* 4. INPUTS (TEXTO E SELECT) */
-        div[data-baseweb="input"], div[data-baseweb="base-input"],
-        div[data-baseweb="select"] > div, div[data-baseweb="textarea"] {
+        /* INPUTS (CAIXAS DE TEXTO E SELEÇÃO) */
+        div[data-baseweb="input"], 
+        div[data-baseweb="base-input"], 
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="textarea"] {
             background-color: #161b22 !important;
             border: 1px solid #30363d !important;
             border-radius: 8px !important;
         }
 
-        /* 5. TÍTULOS E LABELS DOS CAMPOS */
-        .stWidgetLabel p {
-            color: #f0f6fc !important;
-            font-weight: 600 !important;
-            font-size: 0.9rem !important;
+        /* FOCO NO INPUT */
+        div[data-baseweb="input"]:focus-within {
+            border-color: #58a6ff !important;
+            box-shadow: 0 0 0 1px #58a6ff !important;
         }
 
-        /* 6. BOTÕES */
+        /* RADIO BUTTONS (ESTILO DA FOTO - SELEÇÃO VERMELHA) */
+        div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
+            background-color: #161b22 !important;
+            border-color: #30363d !important;
+        }
+
+        div[data-testid="stRadio"] [data-baseweb="radio"][aria-checked="true"] div:first-child {
+            background-color: #ff4b4b !important;
+            border-color: #ff4b4b !important;
+        }
+        
+        div[data-testid="stRadio"] div[role="radiogroup"] {
+            gap: 20px !important;
+        }
+
+        /* BOTÕES */
         button[kind="primary"] {
             background-color: #238636 !important;
             border: none !important;
+            border-radius: 6px !important;
+            padding: 0.5rem 1rem !important;
+            font-weight: bold !important;
+        }
+
+        button[kind="secondary"] {
+            background-color: #21262d !important;
+            color: #f85149 !important;
+            border: 1px solid #30363d !important;
+        }
+
+        /* DIVISOR */
+        hr {
+            border-top: 1px solid #30363d !important;
+            margin: 1.5rem 0 !important;
+        }
+
+        /* ÁREA DE CÓDIGO (MÁSCARA) */
+        code {
+            background-color: #010409 !important;
+            color: #7ee787 !important;
+            border: 1px solid #30363d !important;
         }
         </style>
     """, unsafe_allow_html=True)
