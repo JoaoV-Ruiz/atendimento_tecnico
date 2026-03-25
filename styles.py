@@ -3,75 +3,67 @@ import streamlit as st
 def apply_styles():
     st.markdown("""
         <style>
-        /* FUNDO E TEXTO GLOBAL */
+        /* 1. FUNDO E TEXTO GLOBAL */
         [data-testid="stAppViewContainer"] {
             background-color: #0d1117 !important;
             color: #c9d1d9 !important;
         }
-        
-        [data-testid="stHeader"] {
-            background-color: rgba(0,0,0,0) !important;
-        }
 
-        /* TÍTULOS E LABELS */
-        h1, h2, h3, .stWidgetLabel p, label {
-            color: #ffffff !important;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        /* INPUTS (CAIXAS DE TEXTO E SELEÇÃO) */
-        div[data-baseweb="input"], 
-        div[data-baseweb="base-input"], 
-        div[data-baseweb="select"] > div,
-        div[data-baseweb="textarea"] {
+        /* 2. INPUTS DE TEXTO E SELECT */
+        div[data-baseweb="input"], div[data-baseweb="base-input"], 
+        div[data-baseweb="select"] > div, div[data-baseweb="textarea"] {
             background-color: #161b22 !important;
             border: 1px solid #30363d !important;
             border-radius: 8px !important;
         }
 
-        /* FOCO NO INPUT */
-        div[data-baseweb="input"]:focus-within {
-            border-color: #58a6ff !important;
-            box-shadow: 0 0 0 1px #58a6ff !important;
-        }
-
-        /* RADIO BUTTONS (ESTILO DA FOTO - SELEÇÃO VERMELHA) */
+        /* 3. UNIFORMIZAÇÃO DE RADIOS (REDONDOS) E CHECKBOXES (QUADRADOS) */
+        
+        /* Cor da borda e fundo quando NÃO selecionado */
+        div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child,
         div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
-            background-color: #161b22 !important;
-            border-color: #30363d !important;
+            background-color: #1d2129 !important;
+            border: 1px solid #444c56 !important;
         }
 
+        /* Cor quando SELECIONADO (Ambos ficam com fundo vermelho) */
+        div[data-testid="stCheckbox"] [data-baseweb="checkbox"][aria-checked="true"] div:first-child,
         div[data-testid="stRadio"] [data-baseweb="radio"][aria-checked="true"] div:first-child {
             background-color: #ff4b4b !important;
             border-color: #ff4b4b !important;
         }
-        
-        div[data-testid="stRadio"] div[role="radiogroup"] {
-            gap: 20px !important;
+
+        /* Garante que o ponto interno do Radio seja branco para dar contraste */
+        div[data-testid="stRadio"] [data-baseweb="radio"][aria-checked="true"] div:first-child::after {
+            background-color: white !important;
         }
 
-        /* BOTÕES */
+        /* Efeito de Hover (passar o mouse) */
+        div[data-testid="stRadio"] [data-baseweb="radio"]:hover div:first-child,
+        div[data-testid="stCheckbox"] [data-baseweb="checkbox"]:hover div:first-child {
+            border-color: #58a6ff !important;
+        }
+
+        /* 4. LABELS */
+        .stWidgetLabel p, label {
+            color: #f0f6fc !important;
+            font-weight: 600 !important;
+        }
+
+        /* 5. BOTÕES */
         button[kind="primary"] {
             background-color: #238636 !important;
             border: none !important;
-            border-radius: 6px !important;
-            padding: 0.5rem 1rem !important;
-            font-weight: bold !important;
+            border-radius: 8px !important;
         }
-
+        
         button[kind="secondary"] {
             background-color: #21262d !important;
             color: #f85149 !important;
             border: 1px solid #30363d !important;
         }
 
-        /* DIVISOR */
-        hr {
-            border-top: 1px solid #30363d !important;
-            margin: 1.5rem 0 !important;
-        }
-
-        /* ÁREA DE CÓDIGO (MÁSCARA) */
+        /* 6. MÁSCARA DE TEXTO */
         code {
             background-color: #010409 !important;
             color: #7ee787 !important;
