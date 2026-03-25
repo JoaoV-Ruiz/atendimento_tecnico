@@ -9,17 +9,22 @@ def apply_styles():
             color: #c9d1d9 !important;
         }
 
-        /* 2. RESET GERAL DE FUNDO - evita herança indevida */
-        div[data-testid="stCheckbox"],
-        div[data-testid="stCheckbox"] *,
-        div[data-testid="stCheckbox"] label,
-        div[data-testid="stCheckbox"] label span,
-        div[data-testid="stCheckbox"] label p,
-        div[data-testid="stCheckbox"] [data-baseweb="checkbox"],
-        div[data-testid="stCheckbox"] [data-baseweb="checkbox"] > div ~ div,
-        div[data-testid="stCheckbox"] [data-baseweb="checkbox"] > div ~ div * {
+        /* 2. RESET GLOBAL: garante que nenhum <p> dentro de label/radio/checkbox
+              herde fundo indevido — cobre o caso exato visto no DevTools */
+        label p,
+        label span,
+        [data-baseweb="radio"] p,
+        [data-baseweb="radio"] span,
+        [data-baseweb="checkbox"] p,
+        [data-baseweb="checkbox"] span,
+        [data-testid="stMarkdownContainer"] p {
             background-color: transparent !important;
             background: transparent !important;
+            color: #ffffff !important;
+            display: block !important;  /* sem inline-block que causava o recorte */
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
         /* 3. RADIOS */
@@ -36,7 +41,12 @@ def apply_styles():
             border-color: #ff4b4b !important;
         }
 
-        /* 4. CHECKBOXES - só a caixinha recebe cor */
+        /* 4. CHECKBOXES - só a caixinha recebe cor de fundo */
+        div[data-testid="stCheckbox"],
+        div[data-testid="stCheckbox"] *  {
+            background-color: transparent !important;
+            background: transparent !important;
+        }
         div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
             background-color: #1d2129 !important;
             border: 1px solid #444c56 !important;
@@ -47,14 +57,7 @@ def apply_styles():
             border-color: #ff4b4b !important;
         }
 
-        /* 5. TEXTO DO MARKDOWN PURO (não afeta labels de widgets) */
-        div[data-testid="stMarkdownContainer"] > p {
-            background-color: transparent !important;
-            color: #ffffff !important;
-            margin: 0 !important;
-        }
-
-        /* 6. INPUTS (TEXTO E SELECT) */
+        /* 5. INPUTS (TEXTO E SELECT) */
         div[data-baseweb="input"], div[data-baseweb="base-input"],
         div[data-baseweb="select"] > div, div[data-baseweb="textarea"] {
             background-color: #161b22 !important;
@@ -62,14 +65,14 @@ def apply_styles():
             border-radius: 8px !important;
         }
 
-        /* 7. TÍTULOS E LABELS DOS CAMPOS */
+        /* 6. TÍTULOS E LABELS DOS CAMPOS */
         .stWidgetLabel p {
             color: #f0f6fc !important;
             font-weight: 600 !important;
             font-size: 0.9rem !important;
         }
 
-        /* 8. BOTÕES */
+        /* 7. BOTÕES */
         button[kind="primary"] {
             background-color: #238636 !important;
             border: none !important;
