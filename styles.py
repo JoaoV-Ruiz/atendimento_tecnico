@@ -19,7 +19,7 @@ def apply_styles():
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* INPUTS (CAIXAS DE TEXTO E SELEÇÃO) */
+        /* INPUTS */
         div[data-baseweb="input"], 
         div[data-baseweb="base-input"], 
         div[data-baseweb="select"] > div,
@@ -29,16 +29,8 @@ def apply_styles():
             border-radius: 8px !important;
         }
 
-        /* FOCO NO INPUT */
-        div[data-baseweb="input"]:focus-within {
-            border-color: #58a6ff !important;
-            box-shadow: 0 0 0 1px #58a6ff !important;
-        }
-
-        /* --- AJUSTE DOS COMPONENTES DE SELEÇÃO --- */
-
         /* RADIO BUTTONS (REDONDOS) */
-        /* Estilo base */
+        /* Estilo da bolinha desmarcada */
         div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
             background-color: #161b22 !important;
             border-color: #30363d !important;
@@ -48,16 +40,19 @@ def apply_styles():
         div[data-testid="stRadio"] [aria-checked="true"] div:first-child {
             background-color: #ff4b4b !important;
             border-color: #ff4b4b !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
 
-        /* Forçar o ponto branco central no Radio */
+        /* O ponto branco central do Radio */
         div[data-testid="stRadio"] [aria-checked="true"] div:first-child::after {
-            content: "";
-            width: 6px;
-            height: 6px;
+            content: "" !important;
+            width: 8px !important;
+            height: 8px !important;
             background-color: white !important;
-            border-radius: 50%;
-            display: block;
+            border-radius: 50% !important;
+            display: block !important;
         }
 
         /* CHECKBOXES (QUADRADOS) */
@@ -71,18 +66,12 @@ def apply_styles():
             border-color: #ff4b4b !important;
         }
         
-        /* Espaçamento entre as opções */
-        div[data-testid="stRadio"] div[role="radiogroup"] {
-            gap: 20px !important;
-        }
-
         /* BOTÕES */
         button[kind="primary"] {
             background-color: #238636 !important;
             border: none !important;
             border-radius: 6px !important;
-            padding: 0.5rem 1rem !important;
-            font-weight: bold !important;
+            color: white !important;
         }
 
         button[kind="secondary"] {
@@ -94,24 +83,12 @@ def apply_styles():
         /* DIVISOR */
         hr {
             border-top: 1px solid #30363d !important;
-            margin: 1.5rem 0 !important;
         }
 
-        /* ÁREA DE CÓDIGO (MÁSCARA) */
+        /* ÁREA DE CÓDIGO */
         code {
             background-color: #010409 !important;
             color: #7ee787 !important;
-            border: 1px solid #30363d !important;
         }
         </style>
     """, unsafe_allow_html=True)
-
-# Chamada da função para testar
-apply_styles()
-
-# Exemplos para visualização
-st.title("Teste de Estilo")
-st.radio("Escolha uma opção (Redonda):", ["Opção A", "Opção B", "Opção C"])
-st.checkbox("Marque esta opção (Quadrada)")
-st.text_input("Campo de texto", placeholder="Digite algo...")
-st.button("Botão Primário", kind="primary")
