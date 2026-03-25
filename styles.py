@@ -3,112 +3,79 @@ import streamlit as st
 def apply_styles():
     st.markdown("""
         <style>
-        /* 1. FUNDO GLOBAL E ESTRUTURA */
-        html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-            background-color: #0e1117 !important;
-            color: #e6edf3 !important;
+        /* FUNDO E TEXTO GLOBAL */
+        [data-testid="stAppViewContainer"] {
+            background-color: #0d1117 !important;
+            color: #c9d1d9 !important;
         }
-
-        /* 2. SIDEBAR (MENU LATERAL) */
-        [data-testid="stSidebar"] {
-            background-color: #161b22 !important;
-            border-right: 1px solid #30363d;
-        }
-
-        /* 3. BLINDAGEM TOTAL DOS INPUTS (IGUAL AO BATIDA DE CAIXA) */
         
-        /* Força o fundo escuro em repouso, no hover e no foco */
+        [data-testid="stHeader"] {
+            background-color: rgba(0,0,0,0) !important;
+        }
+
+        /* TÍTULOS E LABELS */
+        h1, h2, h3, .stWidgetLabel p, label {
+            color: #ffffff !important;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        /* INPUTS (CAIXAS DE TEXTO E SELEÇÃO) */
         div[data-baseweb="input"], 
         div[data-baseweb="base-input"], 
-        div[data-baseweb="textarea"],
-        .stTextInput div[data-baseweb="input"],
-        .stTextArea div[data-baseweb="textarea"] {
-            background-color: #1d2129 !important;
-            border-radius: 6px !important;
-            border: 1px solid #444c56 !important;
-        }
-
-        /* Garante que o campo de texto interno seja transparente para mostrar o fundo acima */
-        .stTextInput input, .stTextArea textarea {
-            background-color: transparent !important;
-            color: #ffffff !important;
-            -webkit-text-fill-color: #ffffff !important;
-            border: none !important; /* A borda agora é controlada pela div pai */
-            box-shadow: none !important;
-        }
-
-        /* Ajuste para o estado de HOVER (Passar o mouse) */
-        div[data-baseweb="input"]:hover, 
-        div[data-baseweb="base-input"]:hover {
-            border-color: #8b949e !important;
-        }
-
-        /* Ajuste para o estado de FOCO (Clicado) */
-        div[data-baseweb="input"]:focus-within, 
-        div[data-baseweb="base-input"]:focus-within {
-            background-color: #0d1117 !important;
-            border-color: #58a6ff !important;
-        }
-
-        /* Placeholder (Texto de exemplo) */
-        ::placeholder {
-            color: #484f58 !important;
-            -webkit-text-fill-color: #484f58 !important;
-        }
-
-        /* 4. LABELS (NOMES DOS CAMPOS) */
-        .stWidgetLabel p, label {
-            color: #f0f6fc !important;
-            font-weight: 600 !important;
-        }
-
-        /* 5. CARDS / CONTAINERS */
-        div[data-testid="stVerticalBlock"] > div:has(div.stRadio),
-        .st-emotion-cache-12w0qpk, .st-emotion-cache-6qob1r {
+        div[data-baseweb="select"] > div,
+        div[data-baseweb="textarea"] {
             background-color: #161b22 !important;
-            padding: 15px !important;
-            border-radius: 10px !important;
             border: 1px solid #30363d !important;
+            border-radius: 8px !important;
         }
 
-        /* 6. BOTÕES */
-        button[kind="primary"] {
-            background-color: #238636 !important;
-            color: white !important;
-            border: none !important;
-            width: 100%;
+        /* FOCO NO INPUT */
+        div[data-baseweb="input"]:focus-within {
+            border-color: #58a6ff !important;
+            box-shadow: 0 0 0 1px #58a6ff !important;
+        }
+
+        /* RADIO BUTTONS (ESTILO DA FOTO - SELEÇÃO VERMELHA) */
+        div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child {
+            background-color: #161b22 !important;
+            border-color: #30363d !important;
+        }
+
+        div[data-testid="stRadio"] [data-baseweb="radio"][aria-checked="true"] div:first-child {
+            background-color: #ff4b4b !important;
+            border-color: #ff4b4b !important;
         }
         
+        div[data-testid="stRadio"] div[role="radiogroup"] {
+            gap: 20px !important;
+        }
+
+        /* BOTÕES */
+        button[kind="primary"] {
+            background-color: #238636 !important;
+            border: none !important;
+            border-radius: 6px !important;
+            padding: 0.5rem 1rem !important;
+            font-weight: bold !important;
+        }
+
         button[kind="secondary"] {
             background-color: #21262d !important;
             color: #f85149 !important;
             border: 1px solid #30363d !important;
         }
 
-        /* 7. INFO BOX (LOCALIDADE) */
-        div[data-testid="stNotification"] {
-            background-color: #0d1117 !important;
-            border: 1px solid #388bfd !important;
-            color: #58a6ff !important;
+        /* DIVISOR */
+        hr {
+            border-top: 1px solid #30363d !important;
+            margin: 1.5rem 0 !important;
         }
 
-        /* 8. MÁSCARA E CÓDIGO */
-        code, .stCodeBlock {
+        /* ÁREA DE CÓDIGO (MÁSCARA) */
+        code {
             background-color: #010409 !important;
-            border: 1px solid #30363d !important;
             color: #7ee787 !important;
-        }
-
-        /* 9. RADIOS E CHECKBOXES */
-        div[data-testid="stCheckbox"] p, div[data-testid="stRadio"] p {
-            color: #c9d1d9 !important;
-        }
-        
-        /* 10. SELECTBOX (TÉCNICO) */
-        [data-baseweb="select"] > div {
-            background-color: #1d2129 !important;
-            color: #ffffff !important;
-            border: 1px solid #444c56 !important;
+            border: 1px solid #30363d !important;
         }
         </style>
     """, unsafe_allow_html=True)
