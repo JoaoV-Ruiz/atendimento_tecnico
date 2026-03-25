@@ -34,8 +34,8 @@ def apply_styles():
         /* 1. Estilo da Caixa (Desmarcada) */
         div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child,
         div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
-            background-color: #c23621 !important;
-            border: 1px solid #30363d !important;
+            background-color: #161b22 !important;
+            border: 1px solid #161b22 !important;
         }
 
         /* 2. Estilo da Caixa (Quando Marcada) */
