@@ -8,7 +8,7 @@ from geopy.geocoders import Nominatim
 from datetime import datetime
 from styles import apply_styles 
 
-# --- CONFIGURAÇÕES DO MÓDULO ---
+# --- CONFIGURAÇÕES ---
 LISTA_TECNICOS = [
     " ", "Alisson G", "Caio Alves", "Filipe Vieira", "Kauã Larri", 
     "Igor Saldanha", "Richer Falcão", "João Vitor", "Diogo Bitencourt", 
@@ -30,7 +30,7 @@ def render():
     if "problema_key" not in st.session_state: st.session_state["problema_key"] = "CTO/porta sem sinal"
     if "sem_id_key" not in st.session_state: st.session_state["sem_id_key"] = "Não"
 
-    # 2. FUNÇÕES DE SUPORTE
+    # --- FUNÇÕES DE SUPORTE ---
     def conectar_google_sheets():
         try:
             creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS") or st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
@@ -73,10 +73,10 @@ def render():
         st.rerun()
 
     # --- INTERFACE ---
-    st.title("📶 Registro de Campo")
+    st.title("📊 Registro de Campo")
     
-    # 1. Linha Superior: Técnico e Protocolo Demanda
-    col_t1, col_t2 = st.columns([1.5, 1])
+    # Linha Superior
+    col_t1, col_t2 = st.columns([2, 1.2])
     with col_t1:
         tecnico_selecionado = st.selectbox("Técnico Responsável", LISTA_TECNICOS, key="tec_select")
     with col_t2:
@@ -84,54 +84,49 @@ def render():
 
     st.markdown("---")
 
-    # 2. BLOCO DE CAMPOS ORGANIZADOS (Layout Espelhado)
-    # Linha 1: Nome do Cliente | Tipo de Protocolo
-    c1_l1, c2_l1 = st.columns([1.5, 1])
-    with c1_l1:
+    # Linha 1: Nome | Tipo Protocolo
+    c1, c2 = st.columns([2, 1.2])
+    with c1:
         nome_cliente = st.text_input("Nome do Cliente", key="nome_text")
-    with c2_l1:
-        st.write(" ") # Ajuste de alinhamento vertical
+    with c2:
+        st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
         tipo_proto = st.radio("Tipo de Protocolo:", ["Ativação", "Manutenção"], key="tipo_proto_key", horizontal=True)
 
-    # Linha 2: Protocolo Solicitação | Tipo da Caixa
-    c1_l2, c2_l2 = st.columns([1.5, 1])
-    with c1_l2:
+    # Linha 2: Protocolo Solicitação | Tipo Caixa
+    c3, c4 = st.columns([2, 1.2])
+    with c3:
         protocolo = st.text_input("Protocolo da Solicitação", key="prot_text")
-    with c2_l2:
-        st.write(" ")
+    with c4:
+        st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
         tipo_caixa = st.radio("Tipo da Caixa:", ["1x16", "1x8"], key="tipo_caixa_key", horizontal=True)
 
-    # Linha 3: Número da CTO | Coordenadas
-    c1_l3, c2_l3 = st.columns([1.5, 1])
-    with c1_l3:
+    # Linha 3: Número CTO | Coordenadas
+    c5, c6 = st.columns([2, 1.2])
+    with c5:
         num_cto = st.text_input("Número da CTO", key="cto_text")
-    with c2_l3:
+    with c6:
         coords = st.text_input("Coordenadas (Lat, Long)", key="coords_text")
 
-    # Linha 4: Sinal da CTO | Identificação
-    c1_l4, c2_l4 = st.columns([1.5, 1])
-    with c1_l4:
+    # Linha 4: Sinal | ID
+    c7, c8 = st.columns([2, 1.2])
+    with c7:
         sinal_cto = st.text_input("Sinal da CTO (Power Meter)", key="sinal_text")
-    with c2_l4:
-        st.write(" ")
+    with c8:
+        st.markdown("<div style='margin-top:5px;'></div>", unsafe_allow_html=True)
         sem_id = st.radio("Caixa sem identificação?", ["Sim", "Não"], key="sem_id_key", horizontal=True)
 
-    # Exibe localidade detectada
     cidade_detectada = buscar_cidade(coords)
     if cidade_detectada:
         st.info(f"📍 Localidade: **{cidade_detectada}**")
 
     st.markdown("---")
 
-    # 3. Problema e Observações
-    # Rádio de Problema em uma linha e Observações em outra para manter a clareza
+    # Problema
     problema = st.radio("Problema identificado:", ["CTO/porta sem sinal", "CTO cheia", "CTO/porta com sinal fora do padrão"], key="problema_key")
-    observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=80)
-
-    # 4. Portas (Aparece se o problema for falta de sinal)
+    
+    # Portas Afetadas
     portas_selecionadas = []
     if problema == "CTO/porta sem sinal":
-        st.write("---")
         st.markdown("**Selecione as portas afetadas:**")
         check_todos = st.checkbox("Selecionar TODAS", key="p_todos")
         if check_todos:
@@ -144,9 +139,11 @@ def render():
                     if st.checkbox(f"P{i}", key=f"p_{i}"):
                         portas_selecionadas.append(str(i))
 
+    observacoes = st.text_area("Observações Adicionais (Opcional):", key="obs_text", height=80)
+
     st.divider()
 
-    # 5. Botões de Ação
+    # Botões de Ação
     c_limpar, c_salvar = st.columns(2)
     with c_limpar:
         st.button("🗑️ Limpar Formulário", on_click=reset_form, use_container_width=True)
@@ -169,7 +166,7 @@ def render():
                     except Exception as e:
                         st.error(f"Erro ao salvar: {e}")
 
-    # --- MÁSCARA ---
+    # Máscara de Cópia
     def ck(o_s, o_a): return "(X)" if o_s == o_a else "( )"
     txt_p = f"\n          Portas Afetadas: {', '.join(portas_selecionadas)}" if portas_selecionadas else ""
     txt_obs = f"\nOBSERVAÇÕES: {observacoes}" if observacoes else ""
@@ -208,3 +205,6 @@ Caixa sem identificação: {ck(sem_id, "Sim")} Sim {ck(sem_id, "Não")} Não"""
         }}
         </script>
     """, height=60)
+
+if __name__ == "__main__":
+    render()
