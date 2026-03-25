@@ -38,7 +38,7 @@ def apply_styles():
 
         /* Quando checado (fundo vermelho) */
         div[data-testid="stRadio"] [aria-checked="true"] div:first-child {
-            background-color: #ff4b4b !important;
+            background-color: #1b6e26 !important;
             border-color: #ff4b4b !important;
             display: flex !important;
             align-items: center !important;
