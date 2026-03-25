@@ -162,7 +162,7 @@ def render():
                         obs_final = f" | OBS: {observacoes}" if observacoes else ""
                         prob_f = problema + detalhes_p + obs_final
                         data_reg = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                        nova_linha = [data_reg, cidade_detectada, tecnico_selecionado, protocolo, prob_f, protocolo_demanda]
+                        nova_linha = [data_reg, cidade_detectada, tecnico_selecionado, protocolo_demanda, prob_f, protocolo]
                         aba.append_row(nova_linha)
                         st.toast("Dados registrados com sucesso!", icon="✅")
                         st.balloons()
