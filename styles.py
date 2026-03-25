@@ -29,26 +29,36 @@ def apply_styles():
             border-radius: 8px !important;
         }
 
-        /* 4. DESIGN CORRIGIDO: RADIO E CHECKBOX */
+        /* 4. DESIGN CORRIGIDO: RADIO E CHECKBOX (SEM BORDAS NO TEXTO) */
         
+        /* Remove bordas esquisitas e caixas de seleção ao redor do texto */
+        div[data-testid="stRadio"] div, 
+        div[data-testid="stCheckbox"] div,
+        div[data-baseweb="radio"] div,
+        div[data-baseweb="checkbox"] div {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
         /* Estilo da Caixa/Círculo quando DESMARCADO */
         div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child,
         div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
             background-color: #161b22 !important;
-            border: 1px solid #30363d !important;
+            border: 2px solid #30363d !important; /* Borda um pouco mais grossa para ver melhor */
         }
 
-        /* Estilo quando MARCADO (RADIO) */
+        /* Estilo quando MARCADO (RADIO) - Deixa o vermelho bem vivo */
         div[data-testid="stRadio"] [aria-checked="true"] div:first-child {
-            background-color: transparent !important;
+            background-color: #ffffff !important; /* Fundo branco para o ponto vermelho destacar */
             border-color: #ff4b4b !important;
         }
 
-        /* O ponto central do Radio selecionado */
+        /* O ponto central do Radio selecionado (Vermelho Intenso) */
         div[data-testid="stRadio"] [aria-checked="true"] div:first-child div {
             background-color: #ff4b4b !important;
-            width: 10px !important;
-            height: 10px !important;
+            width: 12px !important;
+            height: 12px !important;
             display: block !important;
         }
 
@@ -58,16 +68,19 @@ def apply_styles():
             border-color: #ff4b4b !important;
         }
 
-        /* Garante que o ícone de check (SVG) fique branco */
+        /* Garante que o ícone de check (SVG) fique branco e nítido */
         div[data-testid="stCheckbox"] [aria-checked="true"] div:first-child svg {
             fill: white !important;
             stroke: white !important;
+            stroke-width: 2px !important;
         }
 
-        /* Texto ao lado dos botões de seleção */
+        /* Texto ao lado (Labels) - Remove qualquer fundo ou borda */
         div[data-testid="stRadio"] label, 
         div[data-testid="stCheckbox"] label {
             color: #c9d1d9 !important;
+            border: none !important;
+            background: none !important;
         }
 
         /* 5. BOTÕES */
