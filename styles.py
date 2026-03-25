@@ -35,7 +35,6 @@ def apply_styles():
         div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child,
         div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
             background-color: #161b22 !important;
-            border: 1px solid #30363d !important;
             border-radius: 4px !important; /* Deixa o Radio quadrado/levemente arredondado como o checkbox */
         }
 
