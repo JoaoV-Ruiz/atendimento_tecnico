@@ -3,7 +3,7 @@ import streamlit as st
 def apply_styles():
     st.markdown("""
         <style>
-        /* FUNDO E TEXTO GLOBAL */
+        /* 1. FUNDO E TEXTO GLOBAL */
         [data-testid="stAppViewContainer"] {
             background-color: #0d1117 !important;
             color: #c9d1d9 !important;
@@ -13,13 +13,13 @@ def apply_styles():
             background-color: rgba(0,0,0,0) !important;
         }
 
-        /* TÍTULOS E LABELS */
+        /* 2. TÍTULOS E LABELS */
         h1, h2, h3, .stWidgetLabel p, label {
             color: #ffffff !important;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-        /* INPUTS GERAIS */
+        /* 3. INPUTS GERAIS (TEXTO, SELECT, TEXTAREA) */
         div[data-baseweb="input"], 
         div[data-baseweb="base-input"], 
         div[data-baseweb="select"] > div,
@@ -29,62 +29,89 @@ def apply_styles():
             border-radius: 8px !important;
         }
 
-        /* --- DESIGN UNIFICADO: RADIO E CHECKBOX --- */
+        /* 4. DESIGN CORRIGIDO: RADIO E CHECKBOX */
         
-        /* 1. Estilo da Caixa (Desmarcada) */
+        /* Estilo da Caixa/Círculo quando DESMARCADO */
         div[data-testid="stRadio"] [data-baseweb="radio"] div:first-child,
         div[data-testid="stCheckbox"] [data-baseweb="checkbox"] div:first-child {
             background-color: #161b22 !important;
-            border: 1px solid #161b22 !important;
+            border: 1px solid #30363d !important;
         }
 
-        /* 2. Estilo da Caixa (Quando Marcada) */
-        div[data-testid="stRadio"] [aria-checked="true"] div:first-child,
+        /* Estilo quando MARCADO (RADIO) */
+        div[data-testid="stRadio"] [aria-checked="true"] div:first-child {
+            background-color: transparent !important;
+            border-color: #ff4b4b !important;
+        }
+
+        /* O ponto central do Radio selecionado */
+        div[data-testid="stRadio"] [aria-checked="true"] div:first-child div {
+            background-color: #ff4b4b !important;
+            width: 10px !important;
+            height: 10px !important;
+            display: block !important;
+        }
+
+        /* Estilo quando MARCADO (CHECKBOX) */
         div[data-testid="stCheckbox"] [aria-checked="true"] div:first-child {
             background-color: #ff4b4b !important;
             border-color: #ff4b4b !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
         }
 
-        /* 3. O "Check" ou "Ponto" interno */
-        /* Para o Radio parecer um Checkbox marcado, vamos usar um ícone ou ponto central */
-        div[data-testid="stRadio"] [aria-checked="true"] div:first-child::after {
-            content: "✓" !important; /* Adiciona um check no rádio também */
-            color: white !important;
-            font-size: 10px !important;
-            font-weight: bold !important;
+        /* Garante que o ícone de check (SVG) fique branco */
+        div[data-testid="stCheckbox"] [aria-checked="true"] div:first-child svg {
+            fill: white !important;
+            stroke: white !important;
         }
 
-        /* Remove o círculo interno padrão do Radio que o Streamlit tenta colocar */
-        div[data-testid="stRadio"] [aria-checked="true"] div:first-child div {
-            display: none !important;
+        /* Texto ao lado dos botões de seleção */
+        div[data-testid="stRadio"] label, 
+        div[data-testid="stCheckbox"] label {
+            color: #c9d1d9 !important;
         }
 
-        /* BOTÕES */
+        /* 5. BOTÕES */
         button[kind="primary"] {
             background-color: #238636 !important;
             border: none !important;
             border-radius: 6px !important;
             color: white !important;
+            width: 100%;
         }
 
         button[kind="secondary"] {
             background-color: #21262d !important;
             color: #f85149 !important;
             border: 1px solid #30363d !important;
+            width: 100%;
         }
 
-        /* DIVISOR */
+        /* 6. DIVISOR E CÓDIGO */
         hr {
             border-top: 1px solid #30363d !important;
         }
 
-        /* ÁREA DE CÓDIGO */
         code {
             background-color: #010409 !important;
             color: #7ee787 !important;
+        }
+
+        /* 7. MÁSCARA PERSONALIZADA (SEM FUNDO NAS LETRAS) */
+        .mascara-container {
+            background-color: #161b22; 
+            padding: 20px; 
+            border-radius: 10px; 
+            border: 1px solid #30363d;
+        }
+        
+        .mascara-texto {
+            color: #7ee787 !important; 
+            font-family: 'Courier New', Courier, monospace !important;
+            font-size: 14px !important;
+            white-space: pre-wrap !important;
+            line-height: 1.6 !important;
+            margin: 0 !important;
+            background: none !important;
         }
         </style>
     """, unsafe_allow_html=True)
