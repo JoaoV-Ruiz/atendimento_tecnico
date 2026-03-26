@@ -34,7 +34,7 @@ apply_styles()
 # --- 4. IMPORTAÇÃO DOS MÓDULOS (BLINDADA) ---
 # Importamos um a um para que se um der erro, o sistema não morra
 try:
-    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, escrita, script_rb
+    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, escrita, scripts_rb
 except Exception as e:
     st.warning(f"Aviso: Alguns módulos estão sendo carregados... (Erro: {e})")
 
