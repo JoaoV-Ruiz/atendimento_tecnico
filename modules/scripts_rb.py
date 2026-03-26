@@ -16,14 +16,14 @@ MAPA_TEMPLATES = {
 def render():
     apply_styles()
     
-    # Inicializa contador de reset se não existir
+    # Inicializa contador de reset exclusivo para este módulo
     if 'reset_rb' not in st.session_state:
         st.session_state.reset_rb = 0
 
     def limpar_campos():
         st.session_state.reset_rb += 1
-        # Limpa chaves específicas deste módulo
-        keys_to_del = [k for k in st.session_state.keys() if "rb_" in k]
+        # Limpa apenas as chaves que começam com 'rb_'
+        keys_to_del = [k for k in st.session_state.keys() if k.startswith("rb_")]
         for k in keys_to_del:
             del st.session_state[k]
         st.rerun()
@@ -31,12 +31,11 @@ def render():
     st.title("📝 Gerador de Configuração MikroTik")
 
     # --- SELEÇÃO DE MODELO ---
-    with st.container():
-        nome_modelo = st.selectbox(
-            "📂 Selecione o Modelo de Roteador", 
-            list(MAPA_TEMPLATES.keys()), 
-            key=f"rb_modelo_{st.session_state.reset_rb}"
-        )
+    nome_modelo = st.selectbox(
+        "📂 Selecione o Modelo de Roteador", 
+        list(MAPA_TEMPLATES.keys()), 
+        key=f"rb_modelo_sel_{st.session_state.reset_rb}"
+    )
 
     st.divider()
 
@@ -75,27 +74,25 @@ def render():
     with col_portas:
         st.subheader("🔌 Portas LAN")
         if "RB 4011" in nome_modelo and is_hotspot:
-            st.info("Selecione as portas LAN ativas (Exceto Porta 2)")
+            st.info("Selecione as portas LAN (Exceto Porta 2)")
             cp1, cp2 = st.columns(2)
             
-            # Porta 1
             if cp1.checkbox("LAN 1", key=f"rb_lan_1_{st.session_state.reset_rb}"):
                 portas_selecionadas.append(1)
             
-            # Portas 3 a 10
             for i in range(3, 11):
                 target_col = cp1 if i <= 6 else cp2
                 if target_col.checkbox(f"LAN {i}", key=f"rb_lan_{i}_{st.session_state.reset_rb}"):
                     portas_selecionadas.append(i)
             portas_selecionadas.sort()
         else:
-            st.write("Configuração de portas padrão para este modelo.")
+            st.write("Configuração de portas padrão.")
             if "RB 4011" in nome_modelo:
-                st.info("📌 Portas fixas: Bridge única.")
+                st.info("📌 Modo Padrão: Bridge única.")
 
     st.divider()
 
-    # --- PROCESSAMENTO LOGICO ---
+    # --- LÓGICA DE GERAÇÃO DINÂMICA ---
     l_ether = 'set [ find default-name=ether2 ] comment=UPLINK'
     v1750_bloco, v1751_bloco, l_bridge, l_bridge_dinamica = "", "", "", ""
 
@@ -107,20 +104,23 @@ def render():
             l_bridge += f"add bridge=Bridge_LAN interface=ether{p}\n"
             l_bridge_dinamica += f"add bridge=Bridge_EasyAuth interface=Vlan1751_ether{p}\n"
 
-    # --- TEMPLATE ---
+    # --- CARREGAMENTO DO TEMPLATE ---
     sufixo = "_hotspot.rsc" if is_hotspot else ".rsc"
     arquivo_rsc = MAPA_TEMPLATES[nome_modelo] + sufixo
 
     try:
-        # Caminho relativo considerando a raiz do projeto
-        caminho_final = os.path.join("templates", arquivo_rsc)
-        
+        # Busca o caminho dinâmico para a pasta templates na raiz
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        caminho_final = os.path.normpath(os.path.join(base_path, "..", "templates", arquivo_rsc))
+
         if not os.path.exists(caminho_final):
-            st.error(f"Arquivo '{arquivo_rsc}' não encontrado na pasta templates!")
+            st.error(f"❌ Arquivo '{arquivo_rsc}' não encontrado!")
+            st.code(f"Local buscado: {caminho_final}", language="text")
         else:
             with open(caminho_final, "r", encoding="utf-8") as f:
                 template_raw = f.read()
 
+            # Substituições no template
             final_script = template_raw.replace("XXXCOD_NOMEXXX", cod_nome)\
                 .replace("XXXUSUARIOPPPOEXXX", pppoe_user)\
                 .replace("XXXSENHAPPPOEXXX", pppoe_pass)\
@@ -136,7 +136,7 @@ def render():
             st.subheader("📄 Preview do Script")
             st.code(final_script, language="bash")
 
-            # Botão de Cópia Estilizado
+            # Componente de Cópia
             template_json = json.dumps(final_script)
             copy_html = f"""
                 <button id="cpBtn" style="background-color: #238636; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 10px;">
@@ -158,7 +158,7 @@ def render():
     except Exception as e:
         st.error(f"Erro ao processar template: {e}")
 
-    # Botão de Limpar no final
+    # Botão de Reset
     st.write("")
     if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
         limpar_campos()
