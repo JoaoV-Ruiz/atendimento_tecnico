@@ -104,28 +104,24 @@ def render():
             l_bridge += f"add bridge=Bridge_LAN interface=ether{p}\n"
             l_bridge_dinamica += f"add bridge=Bridge_EasyAuth interface=Vlan1751_ether{p}\n"
 
-    # --- CARREGAMENTO DO TEMPLATE ---
+    # --- CARREGAMENTO DO TEMPLATE (CAMINHO AJUSTADO) ---
     sufixo = "_hotspot.rsc" if is_hotspot else ".rsc"
     arquivo_rsc = MAPA_TEMPLATES[nome_modelo] + sufixo
 
     try:
-        # Pega o caminho da pasta onde o scripts_rb.py está (modules)
+        # Pega o caminho da pasta 'modules'
         base_path = os.path.dirname(os.path.abspath(__file__))
         
-        # Procura a pasta templates DENTRO de modules
+        # Define o caminho para templates DENTRO de modules
         caminho_final = os.path.normpath(os.path.join(base_path, "templates", arquivo_rsc))
 
-        if not os.path.exists(camincase_final):
-            # Se não achar na modules/templates, tenta na raiz por segurança
-            caminho_raiz = os.path.normpath(os.path.join(base_path, "..", "templates", arquivo_rsc))
-            if os.path.exists(caminho_raiz):
-                caminho_final = caminho_raiz
-            else:
-                st.error(f"❌ Arquivo '{arquivo_rsc}' não encontrado!")
-                st.code(f"Local buscado: {caminho_final}", language="text")
-                return # Interrompe a execução se não achar
+        # Verificação de existência
+        if not os.path.exists(caminho_final):
+            st.error(f"❌ Arquivo '{arquivo_rsc}' não encontrado!")
+            st.code(f"Tentativa de busca em: {caminho_final}", language="text")
+            st.warning("Verifique se a pasta 'templates' está dentro de 'modules'.")
+            return
 
-        # Se chegou aqui, o arquivo foi encontrado
         with open(caminho_final, "r", encoding="utf-8") as f:
             template_raw = f.read()
 
@@ -166,6 +162,7 @@ def render():
 
     except Exception as e:
         st.error(f"Erro ao processar template: {e}")
+
     # Botão de Reset
     st.write("")
     if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
