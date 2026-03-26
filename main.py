@@ -86,6 +86,6 @@ try:
     elif escolha == "🎙️ BOT para escrita":
         escrita.render()
     elif escolha == "💻Scripts Para RB's":
-        script_rb.render()
+        scripts_rb.render()
 except NameError:
     st.error("O módulo selecionado não foi carregado corretamente. Verifique o arquivo na pasta 'modules'.")
