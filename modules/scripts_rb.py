@@ -34,15 +34,13 @@ def render():
     st.write("")
     if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
         limpar_campos()
+    st.divider()
     # --- SELEÇÃO DE MODELO ---
     nome_modelo = st.selectbox(
         "📂 Selecione o Modelo de Roteador", 
         list(MAPA_TEMPLATES.keys()), 
         key=f"rb_modelo_sel_{st.session_state.reset_rb}"
     )
-
-    st.divider()
-
     # --- INPUTS DO USUÁRIO ---
     col_dados, col_portas = st.columns([2, 1])
 
