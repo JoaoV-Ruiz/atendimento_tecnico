@@ -34,7 +34,7 @@ apply_styles()
 # --- 4. IMPORTAÇÃO DOS MÓDULOS (BLINDADA) ---
 # Importamos um a um para que se um der erro, o sistema não morra
 try:
-    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, escrita
+    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, escrita, script_rb
 except Exception as e:
     st.warning(f"Aviso: Alguns módulos estão sendo carregados... (Erro: {e})")
 
@@ -63,7 +63,7 @@ if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
 st.sidebar.title("🚀 Menu Principal")
 escolha = st.sidebar.radio(
     "Selecione a ferramenta:", 
-    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra", "🎙️ BOT para escrita"]
+    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra", "🎙️ BOT para escrita", "💻Scripts Para RB's"]
 )
 
 st.sidebar.divider()
@@ -85,5 +85,7 @@ try:
         demandas.render()
     elif escolha == "🎙️ BOT para escrita":
         escrita.render()
+    elif escolha == "💻Scripts Para RB's":
+        script_rb.render()
 except NameError:
     st.error("O módulo selecionado não foi carregado corretamente. Verifique o arquivo na pasta 'modules'.")
