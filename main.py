@@ -63,7 +63,7 @@ if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
 st.sidebar.title("🚀 Menu Principal")
 escolha = st.sidebar.radio(
     "Selecione a ferramenta:", 
-    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra", "🎙️ BOT para escrita", "💻Scripts Para RB's"]
+    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra", "💻Scripts Para RB's"]
 )
 
 st.sidebar.divider()
@@ -83,8 +83,6 @@ try:
         performance.render()
     elif escolha == "🚧 Demanda Infra":
         demandas.render()
-    elif escolha == "🎙️ BOT para escrita":
-        escrita.render()
     elif escolha == "💻Scripts Para RB's":
         scripts_rb.render()
 except NameError:
