@@ -109,55 +109,63 @@ def render():
     arquivo_rsc = MAPA_TEMPLATES[nome_modelo] + sufixo
 
     try:
-        # Busca o caminho dinâmico para a pasta templates na raiz
+        # Pega o caminho da pasta onde o scripts_rb.py está (modules)
         base_path = os.path.dirname(os.path.abspath(__file__))
-        caminho_final = os.path.normpath(os.path.join(base_path, "..", "templates", arquivo_rsc))
+        
+        # Procura a pasta templates DENTRO de modules
+        caminho_final = os.path.normpath(os.path.join(base_path, "templates", arquivo_rsc))
 
-        if not os.path.exists(caminho_final):
-            st.error(f"❌ Arquivo '{arquivo_rsc}' não encontrado!")
-            st.code(f"Local buscado: {caminho_final}", language="text")
-        else:
-            with open(caminho_final, "r", encoding="utf-8") as f:
-                template_raw = f.read()
+        if not os.path.exists(camincase_final):
+            # Se não achar na modules/templates, tenta na raiz por segurança
+            caminho_raiz = os.path.normpath(os.path.join(base_path, "..", "templates", arquivo_rsc))
+            if os.path.exists(caminho_raiz):
+                caminho_final = caminho_raiz
+            else:
+                st.error(f"❌ Arquivo '{arquivo_rsc}' não encontrado!")
+                st.code(f"Local buscado: {caminho_final}", language="text")
+                return # Interrompe a execução se não achar
 
-            # Substituições no template
-            final_script = template_raw.replace("XXXCOD_NOMEXXX", cod_nome)\
-                .replace("XXXUSUARIOPPPOEXXX", pppoe_user)\
-                .replace("XXXSENHAPPPOEXXX", pppoe_pass)\
-                .replace("XXXWIFI_NAMEXXX", wifi_name)\
-                .replace("XXXWIFI_5GHZ_NAMEXXX", wifi_5ghz_name)\
-                .replace("XXXWIFI_PASSXXX", wifi_pass)\
-                .replace("XXXLINHAS_ETHERNETXXX", l_ether)\
-                .replace("XXXVLAN_1750_DINAMICAXXX", v1750_bloco.strip())\
-                .replace("XXXVLAN_1751_DINAMICAXXX", v1751_bloco.strip())\
-                .replace("XXXLINHAS_BRIDGEXXX", l_bridge.strip())\
-                .replace("XXXLINHAS_BRIDGE_DINAMICAXXX", l_bridge_dinamica.strip())
+        # Se chegou aqui, o arquivo foi encontrado
+        with open(caminho_final, "r", encoding="utf-8") as f:
+            template_raw = f.read()
 
-            st.subheader("📄 Preview do Script")
-            st.code(final_script, language="bash")
+        # Substituições no template
+        final_script = template_raw.replace("XXXCOD_NOMEXXX", cod_nome)\
+            .replace("XXXUSUARIOPPPOEXXX", pppoe_user)\
+            .replace("XXXSENHAPPPOEXXX", pppoe_pass)\
+            .replace("XXXWIFI_NAMEXXX", wifi_name)\
+            .replace("XXXWIFI_5GHZ_NAMEXXX", wifi_5ghz_name)\
+            .replace("XXXWIFI_PASSXXX", wifi_pass)\
+            .replace("XXXLINHAS_ETHERNETXXX", l_ether)\
+            .replace("XXXVLAN_1750_DINAMICAXXX", v1750_bloco.strip())\
+            .replace("XXXVLAN_1751_DINAMICAXXX", v1751_bloco.strip())\
+            .replace("XXXLINHAS_BRIDGEXXX", l_bridge.strip())\
+            .replace("XXXLINHAS_BRIDGE_DINAMICAXXX", l_bridge_dinamica.strip())
 
-            # Componente de Cópia
-            template_json = json.dumps(final_script)
-            copy_html = f"""
-                <button id="cpBtn" style="background-color: #238636; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 10px;">
-                    📋 Copiar Script Completo
-                </button>
-                <script>
-                document.getElementById("cpBtn").addEventListener("click", function() {{
-                    const txt = {template_json};
-                    const el = document.createElement("textarea");
-                    el.value = txt; document.body.appendChild(el); el.select();
-                    document.execCommand('copy'); document.body.removeChild(el);
-                    this.innerText = "Copiado! ✅"; this.style.backgroundColor = "#28a745";
-                    setTimeout(() => {{ this.innerText = "📋 Copiar Script Completo"; this.style.backgroundColor = "#238636"; }}, 2500);
-                }});
-                </script>
-            """
-            components.html(copy_html, height=80)
+        st.subheader("📄 Preview do Script")
+        st.code(final_script, language="bash")
+
+        # Componente de Cópia
+        template_json = json.dumps(final_script)
+        copy_html = f"""
+            <button id="cpBtn" style="background-color: #238636; color: white; border: none; padding: 15px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 10px;">
+                📋 Copiar Script Completo
+            </button>
+            <script>
+            document.getElementById("cpBtn").addEventListener("click", function() {{
+                const txt = {template_json};
+                const el = document.createElement("textarea");
+                el.value = txt; document.body.appendChild(el); el.select();
+                document.execCommand('copy'); document.body.removeChild(el);
+                this.innerText = "Copiado! ✅"; this.style.backgroundColor = "#28a745";
+                setTimeout(() => {{ this.innerText = "📋 Copiar Script Completo"; this.style.backgroundColor = "#238636"; }}, 2500);
+            }});
+            </script>
+        """
+        components.html(copy_html, height=80)
 
     except Exception as e:
         st.error(f"Erro ao processar template: {e}")
-
     # Botão de Reset
     st.write("")
     if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
