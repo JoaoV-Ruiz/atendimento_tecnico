@@ -137,9 +137,10 @@ def render():
             .replace("XXXVLAN_1751_DINAMICAXXX", v1751_bloco.strip())\
             .replace("XXXLINHAS_BRIDGEXXX", l_bridge.strip())\
             .replace("XXXLINHAS_BRIDGE_DINAMICAXXX", l_bridge_dinamica.strip())
-
+        
+        preview_display = re.sub(r"/radius\n.*?\n/radius incoming\nset accept=yes", "[ BLOCO RADIUS OCULTO NO PREVIEW ]", final_script, flags=re.DOTALL)
         st.subheader("📄 Preview do Script")
-        st.code(final_script, language="bash")
+        st.code(preview_display, language="bash")
 
         # Componente de Cópia
         template_json = json.dumps(final_script)
