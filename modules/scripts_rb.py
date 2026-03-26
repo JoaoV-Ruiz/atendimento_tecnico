@@ -29,7 +29,11 @@ def render():
         st.rerun()
 
     st.title("📝 Gerador de Configuração MikroTik")
-
+    st.divider()
+    # Botão de Reset
+    st.write("")
+    if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
+        limpar_campos()
     # --- SELEÇÃO DE MODELO ---
     nome_modelo = st.selectbox(
         "📂 Selecione o Modelo de Roteador", 
@@ -156,10 +160,7 @@ def render():
         """
         components.html(copy_html, height=80)
 
-        # Botão de Reset
-        st.write("")
-        if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
-            limpar_campos()
+        st.divider()
         preview_display = re.sub(r"/radius\n.*?\n/radius incoming\nset accept=yes", "[ BLOCO RADIUS OCULTO NO PREVIEW ]", final_script, flags=re.DOTALL)
         st.subheader("📄 Preview do Script")
         st.code(preview_display, language="bash")
