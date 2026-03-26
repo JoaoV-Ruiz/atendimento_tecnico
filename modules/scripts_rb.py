@@ -156,6 +156,10 @@ def render():
         """
         components.html(copy_html, height=80)
 
+        # Botão de Reset
+        st.write("")
+        if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
+            limpar_campos()
         preview_display = re.sub(r"/radius\n.*?\n/radius incoming\nset accept=yes", "[ BLOCO RADIUS OCULTO NO PREVIEW ]", final_script, flags=re.DOTALL)
         st.subheader("📄 Preview do Script")
         st.code(preview_display, language="bash")
@@ -164,7 +168,4 @@ def render():
     except Exception as e:
         st.error(f"Erro ao processar template: {e}")
 
-    # Botão de Reset
-    st.write("")
-    if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
-        limpar_campos()
+    
