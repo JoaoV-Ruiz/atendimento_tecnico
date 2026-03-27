@@ -45,7 +45,7 @@ if check_password():
     
     # Importação dos módulos (dentro do IF para performance)
     try:
-        from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, scripts_rb, demandas, escrita
+        from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, scripts_rb
     except Exception as e:
         st.error(f"Erro ao carregar módulos: {e}")
 
@@ -59,7 +59,7 @@ if check_password():
     st.sidebar.title("🚀 Menu Principal")
     escolha = st.sidebar.radio(
         "Selecione a ferramenta:", 
-        ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra", "🎙️ BOT para escrita", "💻Scripts Para RB's"]
+        ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra"]
     )
 
     # Renderização dos módulos
@@ -73,10 +73,6 @@ if check_password():
         batida_caixa.render()
     elif escolha == "📈 Performance TME":
         performance.render()
-    elif escolha == "🚧 Demanda Infra":
-        demandas.render()
-    elif escolha == "🎙️ BOT para escrita":
-        escrita.render()
     elif escolha == "💻Scripts Para RB's":
         scripts_rb.render()
 
