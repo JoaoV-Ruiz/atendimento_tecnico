@@ -34,7 +34,7 @@ apply_styles()
 # --- 4. IMPORTAÇÃO DOS MÓDULOS (BLINDADA) ---
 # Importamos um a um para que se um der erro, o sistema não morra
 try:
-    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, demandas, scripts_rb
+    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, scripts_rb
 except Exception as e:
     st.warning(f"Aviso: Alguns módulos estão sendo carregados... (Erro: {e})")
 
@@ -63,7 +63,7 @@ if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
 st.sidebar.title("🚀 Menu Principal")
 escolha = st.sidebar.radio(
     "Selecione a ferramenta:", 
-    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra", "💻Scripts Para RB's"]
+    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "💻Scripts Para RB's"]
 )
 
 st.sidebar.divider()
@@ -81,8 +81,6 @@ try:
         batida_caixa.render()
     elif escolha == "📈 Performance TME":
         performance.render()
-    elif escolha == "🚧 Demanda Infra":
-        demandas.render()
     elif escolha == "💻Scripts Para RB's":
         scripts_rb.render()
 except NameError:
