@@ -2,67 +2,75 @@ import streamlit as st
 import pytz
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA (DEVE SER A PRIMEIRA COISA) ---
 st.set_page_config(page_title="Sistema Atendimento Técnico", layout="wide", page_icon="📊")
 
 # --- 2. IMPORTAÇÃO DE ESTILOS ---
 from styles import apply_styles
 
-# --- 3. FUNÇÃO DE SENHA VIA SECRETS ---
-def check_password():
-    """Retorna True se a senha nos Secrets coincidir com a entrada."""
-    def password_entered():
-        # Busca a senha cadastrada nos Secrets do Streamlit
-        try:
-            senha_correta = st.secrets["SISTEMA_PASSWORD"]
-            if st.session_state["password_input"] == senha_correta:
-                st.session_state["password_correct"] = True
-                del st.session_state["password_input"]
-            else:
-                st.session_state["password_correct"] = False
-        except KeyError:
-            st.error("❌ Erro: 'SISTEMA_PASSWORD' não configurado nos Secrets!")
-
-    if "password_correct" not in st.session_state:
-        # Centraliza a tela de login
-        _, col_login, _ = st.columns([1, 1, 1])
-        with col_login:
-            st.markdown("### 🔐 Acesso Restrito")
-            st.text_input(
-                "Insira a senha mestra:", 
-                type="password", 
-                on_change=password_entered, 
-                key="password_input"
-            )
-            if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-                st.error("😕 Senha incorreta.")
-        return False
-    return True
-
-# --- INÍCIO DA RENDERIZAÇÃO ---
-if check_password():
-    apply_styles() # Aplica o Dark Mode após o login
+# --- 3. INICIALIZAÇÃO DE SEGURANÇA (BOOT) ---
+def boot_session_state():
+    if 'batida_version' not in st.session_state: st.session_state.batida_version = 0
+    if 'batida_proto' not in st.session_state: st.session_state.batida_proto = ""
+    if 'batida_tec' not in st.session_state: st.session_state.batida_tec = ""
+    if 'batida_cx' not in st.session_state: st.session_state.batida_cx = ""
+    if 'anot_batida' not in st.session_state: st.session_state.anot_batida = ""
+    if 'portas' not in st.session_state: st.session_state.portas = []
     
-    # Importação dos módulos (dentro do IF para performance)
-    try:
-        from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, scripts_rb
-    except Exception as e:
-        st.error(f"Erro ao carregar módulos: {e}")
+    for i in range(16):
+        for pref in ['e_b_', 's_b_', 'id_b_']:
+            if f'{pref}{i}' not in st.session_state: st.session_state[f'{pref}{i}'] = ""
+        if f'c_batida_{i}' not in st.session_state: st.session_state[f'c_batida_{i}'] = False
+    
+    if 'dados_cache' not in st.session_state: st.session_state.dados_cache = None
+    if 'ultima_coleta' not in st.session_state: 
+        st.session_state.ultima_coleta = datetime.now() - timedelta(days=1)
+    
+    if 'dia_disparo' not in st.session_state: st.session_state.dia_disparo = 0
 
-    # Inicialização do estado (Boot)
-    # [Mantenha aqui sua função boot_session_state() e a chamada dela]
+boot_session_state()
+apply_styles()
 
-    fuso_br = pytz.timezone('America/Sao_Paulo')
-    agora = datetime.now(fuso_br)
+# --- 4. IMPORTAÇÃO DOS MÓDULOS (BLINDADA) ---
+# Importamos um a um para que se um der erro, o sistema não morra
+try:
+    from modules import amarelos, batida_caixa, encerramentos, portabilidade, performance, scripts_rb
+except Exception as e:
+    st.warning(f"Aviso: Alguns módulos estão sendo carregados... (Erro: {e})")
 
-    # --- MENU LATERAL E CONTEÚDO ---
-    st.sidebar.title("🚀 Menu Principal")
-    escolha = st.sidebar.radio(
-        "Selecione a ferramenta:", 
-        ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "🚧 Demanda Infra"]
-    )
+fuso_br = pytz.timezone('America/Sao_Paulo')
+agora = datetime.now(fuso_br)
 
-    # Renderização dos módulos
+# --- 5. GATILHO AUTOMÁTICO ---
+HORA_ALVO = 23
+MIN_ALVO = 45 
+
+if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
+    if st.session_state.dia_disparo != agora.day:
+        st.session_state.dia_disparo = agora.day
+        with st.status("🤖 Enviando relatório diário...") as status:
+            try:
+                sucesso = amarelos.realizar_coleta_e_envio_automatizado()
+                if sucesso:
+                    status.update(label="✅ Enviado com sucesso!", state="complete")
+                else:
+                    st.session_state.dia_disparo = 0
+                    status.update(label="❌ Erro no envio.", state="error")
+            except:
+                status.update(label="❌ Módulo Amarelos indisponível.", state="error")
+
+# --- 6. INTERFACE ---
+st.sidebar.title("🚀 Menu Principal")
+escolha = st.sidebar.radio(
+    "Selecione a ferramenta:", 
+    ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "💻Scripts Para RB's"]
+)
+
+st.sidebar.divider()
+st.sidebar.info(f"📅 **Hoje:** {agora.strftime('%d/%m/%Y')}\n\n🕒 **Hora:** {agora.strftime('%H:%M:%S')}")
+
+# Renderização segura
+try:
     if escolha == "📑 Resumo Encerramento":
         encerramentos.render()
     elif escolha == "🟡 Resumo Amarelos":
@@ -75,7 +83,5 @@ if check_password():
         performance.render()
     elif escolha == "💻Scripts Para RB's":
         scripts_rb.render()
-
-else:
-    # Bloqueia o restante do app
-    st.stop()
+except NameError:
+    st.error("O módulo selecionado não foi carregado corretamente. Verifique o arquivo na pasta 'modules'.")
