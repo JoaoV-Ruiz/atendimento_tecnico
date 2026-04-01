@@ -7,8 +7,7 @@ import calendar
 import unicodedata
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
-from datetime import datetime, timedelta
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
@@ -17,34 +16,24 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from streamlit_autorefresh import st_autorefresh
 import json
-import traceback
 import pytz
 from pathlib import Path
 
 def render():
-    st_autorefresh(interval=5 * 60 * 1000, key="refresh_encerramentos")
+    # Aumentei o intervalo para 10 minutos para não sobrecarregar o servidor
+    st_autorefresh(interval=10 * 60 * 1000, key="refresh_encerramentos")
     
-    # --- 1. CONFIGURAÇÃO DE SEGREDOS E CAMINHOS (PATHLIB) ---
     ERP_USER = st.secrets["ERP_USER"]
     ERP_PASS = st.secrets["ERP_PASS"]
-    
-    # Define a raiz do projeto (sobe dois níveis de modules/encerramentos.py)
     BASE_DIR = Path(__file__).parent.parent
+    DOWNLOAD_FOLDER = BASE_DIR / st.secrets["DOWNLOAD_PATH"].strip("/")
+    DESTINO_FOLDER = BASE_DIR / st.secrets["DESTINO_PATH"].strip("/")
 
-    # Pega os nomes das pastas dos Secrets e garante que são objetos Path
-    NOME_DOWNLOAD = st.secrets["DOWNLOAD_PATH"].strip("/")
-    NOME_DESTINO = st.secrets["DESTINO_PATH"].strip("/")
-
-    DOWNLOAD_FOLDER = BASE_DIR / NOME_DOWNLOAD
-    DESTINO_FOLDER = BASE_DIR / NOME_DESTINO
-
-    # Cria as pastas no servidor
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
-
     URL_ERP = st.secrets["URL_ERP"]
     
-    # --- 2. FUNÇÕES DE APOIO ---
+    # --- FUNÇÕES DE APOIO ---
     def super_limpeza(texto):
         if not isinstance(texto, str): return ""
         texto = texto.split(" / ")[0].upper()
@@ -60,8 +49,7 @@ def render():
         return None
 
     def analisar_dados_encerramentos(caminho_csv):
-        if caminho_csv is None or not os.path.exists(caminho_csv):
-            return None
+        if caminho_csv is None or not os.path.exists(caminho_csv): return None
         try:
             termos_busca = {
                 "ALISSONDOCOUTOGUERREIRO": "ALISSON DO COUTO GUERREIRO", "IGORSALDANHA": "IGOR SALDANHA",
@@ -73,6 +61,7 @@ def render():
                 "SINDEWCRIZELNUNES": "SINDEW CRIZEL NUNES", "CRISTIANOMARQUES": "CRISTIANO MARQUES",
                 "FILIPEVIEIRAVAZ": "FILIPE VIEIRA VAZ"
             }
+            # Lendo com tratamento de erro para arquivos vazios
             df = pd.read_csv(caminho_csv, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
             col_encontrada = [c for c in df.columns if "Encerramento" in c]
             if not col_encontrada: return None
@@ -90,156 +79,142 @@ def render():
             return None
 
     def mover_arquivo_recente():
-        timeout = 60
+        # Limpeza: espera o arquivo terminar de baixar
+        time.sleep(5) 
         path_str = str(DOWNLOAD_FOLDER.absolute())
-        for _ in range(timeout):
-            if not any(f.endswith(".crdownload") for f in os.listdir(path_str)): break
-            time.sleep(1)
-        
-        arquivos = glob.glob(os.path.join(path_str, "*"))
+        arquivos = glob.glob(os.path.join(path_str, "*.csv"))
         if not arquivos: return None
         
         arquivo_recente = max(arquivos, key=os.path.getmtime)
-        nome_arq = os.path.basename(arquivo_recente)
+        nome_arq = f"relatorio_encerras_{int(time.time())}.csv" # Nome dinâmico para evitar cache de arquivo
         caminho_final = DESTINO_FOLDER / nome_arq
         
         shutil.move(arquivo_recente, str(caminho_final.absolute()))
         return str(caminho_final.absolute())
 
-    # --- 3. AUTOMAÇÃO SELENIUM ---
-    # --- 3. AUTOMAÇÃO SELENIUM ---
-    @st.cache_data(ttl=300, show_spinner=False)
+    # --- AUTOMAÇÃO SELENIUM ---
+    @st.cache_data(ttl=900, show_spinner=False)
     def disparar_automacao_cached():
         prog_container = st.empty()
-        text_container = st.empty()
         p_bar = prog_container.progress(0)
-        status_text = text_container.text("🚀 Robô em ação...")
         
         chrome_options = Options()
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless=new") # Mudança para a versão mais estável do headless
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
-    
+
         abs_download_path = str(DOWNLOAD_FOLDER.absolute())
         prefs = {
             "download.default_directory": abs_download_path,
             "download.prompt_for_download": False,
-            "directory_upgrade": True,
-            "safebrowsing.enabled": True
+            "directory_upgrade": True
         }
         chrome_options.add_experimental_option("prefs", prefs)
-    
+
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
-            
-            # Comando CRÍTICO para habilitar downloads no modo Headless do Linux
-            driver.execute_cdp_cmd("Page.setDownloadBehavior", {
-                "behavior": "allow",
-                "downloadPath": abs_download_path
-            })
-    
-            wait = WebDriverWait(driver, 35)
+            driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
+            wait = WebDriverWait(driver, 40)
             
             def forcar_input_react(elemento, valor):
-                script = """
-                var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
-                element.value = value; var event = new Event('input', { bubbles: true });
-                var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); }
-                element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
-                """
-                driver.execute_script(script, elemento, valor)
-    
+                driver.execute_script("""
+                    var element = arguments[0]; var value = arguments[1];
+                    element.value = value;
+                    element.dispatchEvent(new Event('input', { bubbles: true }));
+                    element.dispatchEvent(new Event('change', { bubbles: true }));
+                    element.blur();
+                """, elemento, valor)
+
             # 1. Login
-            status_text.text("🔐 Efetuando Login...")
-            p_bar.progress(20)
+            p_bar.progress(10, text="🔐 Efetuando Login...")
             driver.get(URL_ERP)
             time.sleep(5)
-            try:
-                c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
-                c_pass = driver.find_element(By.ID, ":r1:")
-                forcar_input_react(c_user, ERP_USER)
-                forcar_input_react(c_pass, ERP_PASS) 
-                driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
-                time.sleep(10)
-            except: pass
-    
-            # 2. Tela Antiga
-            status_text.text("⚙️ Acessando interface...")
-            p_bar.progress(40)
-            try:
-                btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
-                driver.execute_script("arguments[0].click();", btn_ant)
-                time.sleep(6)
-            except: pass
-    
-            # 3. Filtros
-            status_text.text("🔍 Aplicando filtros...")
-            p_bar.progress(60)
-            try:
-                driver.get(URL_ERP)
-                time.sleep(5)
-                wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-                time.sleep(3)
-    
-                driver.find_element(By.ID, "teamId").click()
-                time.sleep(1)
-                f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
-                f_all.send_keys("COP Encerramentos")
-                f_all.send_keys(Keys.ENTER)
-                time.sleep(3)
-                wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
-                time.sleep(1)
-                driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
-    
-                # Limpeza datas
-                driver.execute_script("""
-                    ['beginInitialDate', 'endInitialDate'].forEach(id => {
-                        var el = document.getElementById(id);
-                        if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
-                    });
-                """)
-    
-                hj = datetime.now()
-                fim = hj.replace(day=calendar.monthrange(hj.year, hj.month)[1]).strftime("%d/%m/%Y")
-                forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), fim)
-                time.sleep(2)
-                driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-                time.sleep(12)
-            except: pass
-    
-            # 4. Exportação
-            status_text.text("📥 Baixando CSV...")
-            p_bar.progress(85)
-            try:
-                btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
-                driver.execute_script("arguments[0].click();", btn_exp)
-                time.sleep(2)
-                driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
-                
-                time.sleep(30) # Tempo maior para o servidor processar
-                caminho = mover_arquivo_recente()
-                
-                if caminho is None:
-                    return None
-    
-                status_text.text("✅ Sincronizado!")
-                p_bar.progress(100)
-                time.sleep(1)
-                prog_container.empty()
-                text_container.empty()
-                
-                hora_br = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")
-                return {"dados": analisar_dados_encerramentos(caminho), "horario": hora_br}
-            except: return None
-                
-        finally:
-            if driver: driver.quit()
             
-    # --- 4. INTERFACE STREAMLIT ---
+            # Tenta localizar campos de login com seletores mais flexíveis
+            user_field = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text'], input#\\:r0\\:")))
+            pass_field = driver.find_element(By.CSS_SELECTOR, "input[type='password'], input#\\:r1\\:")
+            
+            forcar_input_react(user_field, ERP_USER)
+            forcar_input_react(pass_field, ERP_PASS)
+            
+            btn_login = driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
+            driver.execute_script("arguments[0].click();", btn_login)
+            time.sleep(8)
+
+            # 2. Navegação e Filtros
+            p_bar.progress(40, text="🔍 Aplicando filtros...")
+            driver.get(f"{URL_ERP}#/all_solicitations")
+            time.sleep(5)
+            
+            wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
+            time.sleep(3)
+
+            # Seleção de Equipe
+            wait.until(EC.element_to_be_clickable((By.ID, "teamId"))).click()
+            time.sleep(1)
+            f_all = wait.until(EC.presence_of_element_located((By.ID, "filterAll")))
+            f_all.send_keys("COP Encerramentos")
+            time.sleep(2)
+            f_all.send_keys(Keys.ENTER)
+            time.sleep(2)
+            
+            wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(., 'COP Encerramentos')]"))).click()
+            driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+
+            # Datas
+            hj = datetime.now()
+            ultimo_dia = calendar.monthrange(hj.year, hj.month)[1]
+            data_ini = f"01/{hj.month:02d}/{hj.year}"
+            data_fim = f"{ultimo_dia:02d}/{hj.month:02d}/{hj.year}"
+            
+            # Limpeza via JS para garantir que o campo aceite o novo valor
+            driver.execute_script("document.getElementById('beginReportClosingDate').value = '';")
+            forcar_input_react(driver.find_element(By.ID, "beginReportClosingDate"), data_ini)
+            
+            driver.execute_script("document.getElementById('finalReportClosingDate').value = '';")
+            forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), data_fim)
+            
+            time.sleep(2)
+            driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
+            time.sleep(10)
+
+            # 3. Exportação
+            p_bar.progress(80, text="📥 Baixando CSV...")
+            btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
+            driver.execute_script("arguments[0].click();", btn_exp)
+            time.sleep(2)
+            
+            btn_csv = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]")))
+            driver.execute_script("arguments[0].click();", btn_csv)
+            
+            time.sleep(25) # Espera o download
+            caminho = mover_arquivo_recente()
+            
+            p_bar.progress(100, text="✅ Concluído!")
+            time.sleep(2)
+            prog_container.empty()
+            
+            hora_br = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")
+            return {"dados": analisar_dados_encerramentos(caminho), "horario": hora_br}
+
+        except Exception as e:
+            st.error(f"Ocorreu um erro no robô: {str(e)}")
+            return None
+        finally:
+            if driver:
+                driver.quit()
+
+    # --- LÓGICA DE EXIBIÇÃO (REVISADA) ---
     st.title("🚀 É A EQUIPE DO ENCERRAS!!!")
+    
+    # Botão manual para forçar atualização se necessário
+    if st.button("🔄 Atualizar Agora"):
+        st.cache_data.clear()
+        st.rerun()
+
     resultado = disparar_automacao_cached()
     
     if resultado and resultado.get("dados") is not None:
