@@ -144,9 +144,17 @@ def render():
             driver.execute_script("arguments[0].click();", btn_login)
             time.sleep(8)
 
+            # 2. Tela Antiga
+            status_text.text("⚙️ Acessando interface...")
+            p_bar.progress(30)
+            try:
+                btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
+                driver.execute_script("arguments[0].click();", btn_ant)
+                time.sleep(6)
+            except: pass
             # 2. Navegação e Filtros
             p_bar.progress(40, text="🔍 Aplicando filtros...")
-            driver.get(f"{URL_ERP}#/all_solicitations")
+            driver.get(URL_ERP)
             time.sleep(5)
             
             wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
