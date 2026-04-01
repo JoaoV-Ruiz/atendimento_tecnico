@@ -99,11 +99,7 @@ def executar_robo_erp(mes, ano):
     driver = webdriver.Chrome(options=chrome_options)
     driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_path})
     
-   try:
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
-        wait = WebDriverWait(driver, 40)
-        
+   try: 
         def forcar_input_react(elemento, valor):
             script = """
             var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
