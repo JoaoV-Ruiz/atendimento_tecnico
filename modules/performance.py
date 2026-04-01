@@ -75,7 +75,6 @@ def load_technical_data():
         return gspread.authorize(creds).open_by_url(url).worksheet("AtendimentoTécnico").get("A8:AJ20")
     except: return None
 
-# --- 3. MOTOR DE AUTOMAÇÃO (ATUALIZADO) ---
 def executar_robo_erp(mes, ano):
     BASE_DIR = Path(__file__).parent.parent
     DOWNLOAD_FOLDER = BASE_DIR / st.secrets["DOWNLOAD_PATH"].strip("/")
@@ -83,7 +82,7 @@ def executar_robo_erp(mes, ano):
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    # Limpa downloads anteriores
+    # Limpeza de arquivos antigos para evitar pegar o CSV errado
     for f in glob.glob(str(DOWNLOAD_FOLDER / "*.csv")):
         try: os.remove(f)
         except: pass
@@ -92,110 +91,96 @@ def executar_robo_erp(mes, ano):
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     
-    abs_download_path = str(DOWNLOAD_FOLDER.absolute())
-    prefs = {
-        "download.default_directory": abs_download_path,
-        "download.prompt_for_download": False,
-        "directory_upgrade": True
-    }
-    chrome_options.add_experimental_option("prefs", prefs)
+    abs_path = str(DOWNLOAD_FOLDER.absolute())
+    chrome_options.add_experimental_option("prefs", {"download.default_directory": abs_path})
     
     driver = webdriver.Chrome(options=chrome_options)
-    driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
-    wait = WebDriverWait(driver, 45)
+    driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_path})
+    
+   try:
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_download_path})
+        wait = WebDriverWait(driver, 40)
+        
+        def forcar_input_react(elemento, valor):
+            script = """
+            var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
+            element.value = value; var event = new Event('input', { bubbles: true });
+            var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); }
+            element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
+            """
+            driver.execute_script(script, elemento, valor)
 
-    def forcar_input_react(elemento, valor):
-        script = """
-        var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
-        element.value = value; var event = new Event('input', { bubbles: true });
-        var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); }
-        element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
-        """
-        driver.execute_script(script, elemento, valor)
-
-    try:
         # 1. Login
-        driver.get(st.secrets["URL_ERP"])
+        p_bar.progress(10, text="Login...")
+        driver.get(URL_ERP)
         time.sleep(5)
         try:
             c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
             c_pass = driver.find_element(By.ID, ":r1:")
-            forcar_input_react(c_user, st.secrets["ERP_USER"])
-            forcar_input_react(c_pass, st.secrets["ERP_PASS"])
-            driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
-            time.sleep(8)
+            forcar_input_react(c_user, ERP_USER)
+            forcar_input_react(c_pass, ERP_PASS) 
+            driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
+            time.sleep(10)
         except: pass
 
-        # 2. Transição para Tela Antiga (Conforme seu motor de captura)
+        # 2. Tela Antiga
+        p_bar.progress(30, text="Acessando a Tela Antiga...")
         try:
             btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
             driver.execute_script("arguments[0].click();", btn_ant)
             time.sleep(6)
         except: pass
-
-        # 3. Filtros e Datas
-        driver.get(st.secrets["URL_ERP"])
-        time.sleep(5)
-        
-        # Abrir Filtro
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-        time.sleep(3)
-
-        # Selecionar Equipe
+        # Seleção da Equipe
         driver.find_element(By.ID, "teamId").click()
-        f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+        f_all = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
         f_all.send_keys("COP Encerramentos")
         f_all.send_keys(Keys.ENTER)
         time.sleep(2)
-        
-        item = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
+        item = wait.until(EC.presence_of_element_located((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
         driver.execute_script("arguments[0].click();", item)
         driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
 
-        # Configurar Datas
+        # --- LÓGICA DE DATAS (Mês Atual vs Anterior) ---
         hj = datetime.now()
         data_ini = f"01/{mes:02d}/{ano}"
-        data_fim = hj.strftime("%d/%m/%Y") if (mes == hj.month and ano == hj.year) else f"{calendar.monthrange(ano, mes)[1]:02d}/{mes:02d}/{ano}"
+        
+        # Se for o mês atual, vai até hoje. Se for mês passado, vai até o último dia daquele mês.
+        if mes == hj.month and ano == hj.year:
+            data_fim = hj.strftime("%d/%m/%Y")
+        else:
+            ultimo_dia = calendar.monthrange(ano, mes)[1]
+            data_fim = f"{ultimo_dia:02d}/{mes:02d}/{ano}"
 
-        # Limpeza de campos de data via Script
-        driver.execute_script("""
-            ['beginReportClosingDate', 'finalReportClosingDate'].forEach(id => {
-                var el = document.getElementById(id);
-                if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
-            });
-        """)
-
-        forcar_input_react(driver.find_element(By.ID, "beginReportClosingDate"), data_ini)
-        forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), data_fim)
+        # Inserção das datas via Script (mais seguro para campos React)
+        script_react = "var el = document.getElementById(arguments[0]); el.value = arguments[1]; el.dispatchEvent(new Event('input', {bubbles:true}));"
+        driver.execute_script(script_react, "beginReportClosingDate", data_ini)
+        driver.execute_script(script_react, "finalReportClosingDate", data_fim)
         
         time.sleep(2)
         driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-        time.sleep(15) # Espera carregar grid
+        time.sleep(12)
 
-        # 4. Exportação
-        btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
+        # --- EXPORTAÇÃO ---
+        btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
         driver.execute_script("arguments[0].click();", btn_exp)
-        time.sleep(2)
-        
         wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
         
-        # Loop de verificação de download
-        for _ in range(30):
-            arquivos = glob.glob(os.path.join(abs_download_path, "*.csv"))
+        # Aguarda o download e move o arquivo
+        for _ in range(40):
+            arquivos = glob.glob(os.path.join(abs_path, "*.csv"))
             if arquivos and not any(f.endswith('.crdownload') for f in arquivos):
                 recente = max(arquivos, key=os.path.getmtime)
-                nome_final = f"perf_{mes}_{ano}.csv"
-                dest = DESTINO_FOLDER / nome_final
+                dest = DESTINO_FOLDER / f"perf_{mes}_{ano}.csv"
                 shutil.move(recente, str(dest))
                 return pd.read_csv(str(dest), sep=None, engine='python', encoding='latin-1')
             time.sleep(2)
             
         return None
     except Exception as e:
-        print(f"Erro no robô: {e}")
+        st.error(f"Erro ao coletar dados de {mes}/{ano}: {e}")
         return None
     finally:
         driver.quit()
