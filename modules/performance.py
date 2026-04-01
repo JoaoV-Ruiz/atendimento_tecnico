@@ -71,7 +71,7 @@ def load_technical_data():
     try:
         from google.oauth2.service_account import Credentials
         creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
-        # Aumentado para AJ para pegar os dias 30 e 31
+        # Intervalo AJ para garantir dias 30 e 31
         return gspread.authorize(creds).open_by_url(url).worksheet("AtendimentoTécnico").get("A8:AJ20")
     except: return None
 
@@ -111,14 +111,13 @@ def executar_robo_erp(mes, ano):
             driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
             time.sleep(8)
         
-        # Filtros e Coleta
+        # Tela antiga e Filtros
         driver.get(f"{st.secrets['URL_ERP']}#/all_solicitations")
         time.sleep(12)
 
         script_filtro = "var bt = document.querySelectorAll('button'); for(var b of bt){if(b.innerHTML.includes('fa-filter')){b.click(); return true;}} return false;"
         if driver.execute_script(script_filtro):
             time.sleep(5)
-            # Seleção Equipe
             wait.until(EC.presence_of_element_located((By.ID, "teamId"))).click()
             f_all = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
             f_all.send_keys("COP Encerramentos")
@@ -140,12 +139,11 @@ def executar_robo_erp(mes, ano):
             driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
             time.sleep(12)
 
-            # Exportação
+            # Exportar
             btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
             driver.execute_script("arguments[0].click();", btn_exp)
             wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
             
-            # Aguarda Download
             for _ in range(40):
                 arquivos = glob.glob(os.path.join(abs_path, "*.csv"))
                 if arquivos and not any(f.endswith('.crdownload') for f in arquivos):
@@ -163,39 +161,34 @@ def sincronizar_periodo_completo():
     fuso = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso)
     dt_p = agora.replace(day=1) - timedelta(days=1)
-    
     banco = {}
     banco['passado'] = executar_robo_erp(dt_p.month, dt_p.year)
     banco['atual'] = executar_robo_erp(agora.month, agora.year)
     return banco
 
 # --- 4. INTERFACE ---
-def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
-    # Inicialização blindada
+def desenhar_aba(dados_tme_raw, df_bruto, tecnico_sel, mes, ano, dia_limite):
     df_tec = pd.DataFrame(columns=['DATA_REF', 'Tec_Formatado'])
-    
     if df_bruto is not None and not df_bruto.empty:
         df = df_bruto.copy()
         col_data = [c for c in df.columns if "Encerramento" in c][0]
         df['DATA_REF'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
         possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável", "Nome"]
         col_atendente = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
-        df['Tec_Formatado'] = df[col_atendente].apply(lambda x: next((k for k, v in MAPEAMENTO_TECNICOS.items() if super_limpeza(v) in super_limpeza(str(x))), None))
-        df_tec = df[df['Tec_Formatado'] == tecnico].dropna(subset=['DATA_REF'])
+        df['Tec_Formatado'] = df[col_atendente].apply(lambda x: next((p_nome for p_nome, erp_nome in MAPEAMENTO_TECNICOS.items() if super_limpeza(erp_nome) in super_limpeza(str(x))), None))
+        df_tec = df[df['Tec_Formatado'] == tecnico_sel].dropna(subset=['DATA_REF'])
 
-    # TME Planilha
     mapa_tme = {l[0]: l[3:] for l in dados_tme_raw if len(l) > 0}
-    tempos_raw = mapa_tme.get(tecnico, [])
+    tempos_raw = mapa_tme.get(tecnico_sel, [])
     while len(tempos_raw) < 31: tempos_raw.append("") 
 
-    # Métricas
     total_enc = len(df_tec)
     tempos_seg = [converter_para_segundos(t) for t in tempos_raw[:dia_limite]]
     validos = [t for t in tempos_seg if t is not None]
     media_seg = sum(validos) / len(validos) if validos else 0
     
     c1, c2, c3 = st.columns([2,1,1])
-    with c1: st.markdown(f"### {tecnico}")
+    with c1: st.subheader(f"👤 {tecnico_sel}")
     with c2: st.metric("Total Encerramentos", f"{total_enc} un")
     with c3: st.metric("TME Médio (Mês)", formatar_segundos(media_seg))
     
@@ -212,7 +205,7 @@ def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
             qtd = counts.get(dia, 0)
             tme_dia = str(tempos_raw[i]).strip() if i < len(tempos_raw) else ""
             cor = "#FFFFFF"
-            if tme_dia in ["", "FORA"]: cor = "#FFD700"
+            if tme_dia in ["", "FORA"]: cor = "#FFD700"; tme_dia = "FORA"
             elif converter_para_segundos(tme_dia) and converter_para_segundos(tme_dia) > 900: cor = "#FF4B4B"
 
             st.markdown(f"""
@@ -232,8 +225,10 @@ def render():
     dados_planilha = load_technical_data()
     if not dados_planilha: return
     
-    tecnicos = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-    selecionado = st.sidebar.selectbox("Filtro Técnico:", tecnicos)
+    nomes = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
+    
+    st.markdown("### 📈 Painel de Performance")
+    selecionado = st.selectbox("Selecione o Técnico:", nomes)
 
     banco = sincronizar_periodo_completo()
     tab1, tab2 = st.tabs([f"📅 Mês Atual", f"⏪ Mês Anterior"])
