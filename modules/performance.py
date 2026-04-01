@@ -49,11 +49,18 @@ def converter_para_segundos(tempo_str):
     if not tempo_str or str(tempo_str).strip() in ["", "FORA"]: return None
     try:
         partes = str(tempo_str).split(':')
-        h, m, s = (map(int, partes) if len(partes) == 3 else [0] + list(map(int, partes)))
-        return h * 3600 + m * 60 + s
+        # Suporta H:M:S ou M:S
+        if len(partes) == 3:
+            h, m, s = map(int, partes)
+            return h * 3600 + m * 60 + s
+        elif len(partes) == 2:
+            m, s = map(int, partes)
+            return m * 60 + s
+        return None
     except: return None
 
 def formatar_segundos(segundos):
+    if segundos is None or segundos < 0: return "00:00:00"
     return str(timedelta(seconds=int(segundos)))
 
 @st.cache_data(ttl=600)
@@ -74,6 +81,7 @@ def executar_robo_erp(mes, ano):
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
 
+    # Limpeza
     for f in glob.glob(str(DOWNLOAD_FOLDER / "*")):
         try: os.remove(f)
         except: pass
@@ -91,28 +99,28 @@ def executar_robo_erp(mes, ano):
     driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_path})
     
     try:
-        wait = WebDriverWait(driver, 40)
+        wait = WebDriverWait(driver, 45)
         driver.get(st.secrets["URL_ERP"])
         
-        # --- 1. LOGIN ---
+        # 1. LOGIN
         inputs = driver.find_elements(By.ID, ":r0:")
         if inputs:
             inputs[0].send_keys(st.secrets["ERP_USER"])
             driver.find_element(By.ID, ":r1:").send_keys(st.secrets["ERP_PASS"])
             driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
             time.sleep(8)
-        # 2. Tela Antiga
+        
+        # Tela Antiga
         try:
-                btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
-                driver.execute_script("arguments[0].click();", btn_ant)
-                time.sleep(6)
+            btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
+            driver.execute_script("arguments[0].click();", btn_ant)
+            time.sleep(6)
         except: pass
             
-        # --- 2. ACESSO DIRETO E ABERTURA DE FILTRO ---
+        # 2. ACESSO DIRETOR E FILTRO
         driver.get(st.secrets['URL_ERP'])
-        time.sleep(12) # Tempo essencial para o React montar o grid
+        time.sleep(10)
 
-        # Script agressivo para achar o botão de filtro por ícone ou tooltip
         script_abrir_filtro = """
         var botoes = document.querySelectorAll('button');
         var clicou = false;
@@ -125,126 +133,128 @@ def executar_robo_erp(mes, ano):
         return clicou;
         """
         
-        abriu = False
-        for tentativa in range(5):
-            if driver.execute_script(script_abrir_filtro):
-                time.sleep(4)
-                if driver.find_elements(By.ID, "teamId"): # Se esse campo existe, o filtro abriu
-                    abriu = True
-                    break
-            driver.refresh() # Se falhar, dá um refresh e tenta de novo
-            time.sleep(8)
-
-        if not abriu:
-            raise Exception("O menu de filtros não abriu após 5 tentativas.")
-
-        # --- 3. SELEÇÃO DE EQUIPE (VIA JS PARA EVITAR ERRO DE CLIQUE) ---
-        campo_eq = wait.until(EC.presence_of_element_located((By.ID, "teamId")))
-        driver.execute_script("arguments[0].click();", campo_eq)
-        time.sleep(2)
-        
-        f_all = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
-        f_all.send_keys("COP Encerramentos")
-        time.sleep(2)
-        f_all.send_keys(Keys.ENTER)
-        time.sleep(3)
-        
-        item = wait.until(EC.presence_of_element_located((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
-        driver.execute_script("arguments[0].click();", item)
-        
-        btn_confirmar = driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]")
-        driver.execute_script("arguments[0].click();", btn_confirmar)
-        time.sleep(2)
-
-        # --- 4. DATAS ---
-        hj = datetime.now()
-        data_ini = f"01/{mes:02d}/{ano}"
-        data_fim = hj.strftime("%d/%m/%Y") if (mes == hj.month and ano == hj.year) else f"{calendar.monthrange(ano, mes)[1]:02d}/{mes:02d}/{ano}"
-
-        script_react = "var el = document.getElementById(arguments[0]); el.value = arguments[1]; el.dispatchEvent(new Event('input', {bubbles:true}));"
-        driver.execute_script(script_react, "beginReportClosingDate", data_ini)
-        driver.execute_script(script_react, "finalReportClosingDate", data_fim)
-        time.sleep(2)
-        
-        btn_aplicar = driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]")
-        driver.execute_script("arguments[0].click();", btn_aplicar)
-        time.sleep(12)
-
-        # --- 5. EXPORTAÇÃO ---
-        btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
-        driver.execute_script("arguments[0].click();", btn_exp)
-        
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
-        
-        # Aguarda Download
-        for _ in range(40):
-            arquivos = glob.glob(os.path.join(abs_path, "*.csv"))
-            if arquivos and not any(f.endswith('.crdownload') for f in arquivos):
-                recente = max(arquivos, key=os.path.getmtime)
-                dest = DESTINO_FOLDER / f"perf_{mes}_{ano}.csv"
-                shutil.move(recente, str(dest))
-                
-                # Leitura do CSV
-                df = pd.read_csv(str(dest), sep=None, engine='python', encoding='latin-1')
-                col_data = [c for c in df.columns if "Encerramento" in c][0]
-                df['DATA_REF'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
-                possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável"]
-                col_tec = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
-                df['Atendente_Planilha'] = df[col_tec].apply(lambda x: next((k for k, v in MAPEAMENTO_TECNICOS.items() if super_limpeza(v) in super_limpeza(str(x))), None))
-                return df.dropna(subset=['Atendente_Planilha', 'DATA_REF'])
+        if driver.execute_script(script_abrir_filtro):
+            time.sleep(5)
+            # Seleção Equipe
+            campo_eq = wait.until(EC.presence_of_element_located((By.ID, "teamId")))
+            driver.execute_script("arguments[0].click();", campo_eq)
             time.sleep(2)
+            f_all = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
+            f_all.send_keys("COP Encerramentos")
+            f_all.send_keys(Keys.ENTER)
+            time.sleep(3)
+            item = wait.until(EC.presence_of_element_located((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
+            driver.execute_script("arguments[0].click();", item)
+            driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+            time.sleep(2)
+
+            # Datas
+            hj = datetime.now()
+            data_ini = f"01/{mes:02d}/{ano}"
+            data_fim = hj.strftime("%d/%m/%Y") if (mes == hj.month and ano == hj.year) else f"{calendar.monthrange(ano, mes)[1]:02d}/{mes:02d}/{ano}"
+
+            script_react = "var el = document.getElementById(arguments[0]); el.value = arguments[1]; el.dispatchEvent(new Event('input', {bubbles:true}));"
+            driver.execute_script(script_react, "beginReportClosingDate", data_ini)
+            driver.execute_script(script_react, "finalReportClosingDate", data_fim)
+            time.sleep(2)
+            driver.execute_script("arguments[0].click();", driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]"))
+            time.sleep(12)
+
+            # Exportação
+            btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
+            driver.execute_script("arguments[0].click();", btn_exp)
+            wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
             
+            # Download
+            for _ in range(40):
+                arquivos = glob.glob(os.path.join(abs_path, "*.csv"))
+                if arquivos and not any(f.endswith('.crdownload') for f in arquivos):
+                    recente = max(arquivos, key=os.path.getmtime)
+                    dest = DESTINO_FOLDER / f"perf_{mes}_{ano}.csv"
+                    shutil.move(recente, str(dest))
+                    df = pd.read_csv(str(dest), sep=None, engine='python', encoding='latin-1')
+                    return df # Retorna o dataframe bruto para processamento
+                time.sleep(2)
+        return None
     except Exception as e:
-        print(f"ERRO CRÍTICO: {e}")
+        st.error(f"Erro no Robô ({mes}/{ano}): {e}")
         return None
     finally:
         driver.quit()
 
-# --- 4. COLETA UNIFICADA (A SOLUÇÃO PARA O STACKTRACE) ---
-@st.cache_data(ttl=900, show_spinner="🤖 Sincronizando meses Atual e Anterior...")
+@st.cache_data(ttl=900, show_spinner="🤖 Sincronizando Período Completo...")
 def sincronizar_periodo_completo():
     fuso = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso)
-    m_at, a_at = agora.month, agora.year
+    # Mês Atual
+    df_atual = executar_robo_erp(agora.month, agora.year)
+    # Mês Anterior
     dt_p = agora.replace(day=1) - timedelta(days=1)
-    m_pa, a_pa = dt_p.month, dt_p.year
-
-    banco = {}
-    banco['passado'] = executar_robo_erp(m_pa, a_pa)
-    banco['atual'] = executar_robo_erp(m_at, a_at)
-    return banco
-
-# --- 5. INTERFACE ---
-def desenhar_aba(dados_tme, df_erp, tecnico, mes, ano, dia_limite):
-    df_tec = df_erp[df_erp['Atendente_Planilha'] == tecnico] if df_erp is not None else pd.DataFrame()
-    total = len(df_tec)
+    df_passado = executar_robo_erp(dt_p.month, dt_p.year)
     
+    return {'atual': df_atual, 'passado': df_passado}
+
+def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
+    # 1. TRATAMENTO DOS DADOS DO ERP
+    df_tec = pd.DataFrame()
+    if df_bruto is not None and not df_bruto.empty:
+        df = df_bruto.copy()
+        # Identifica coluna de data
+        col_data = [c for c in df.columns if "Encerramento" in c][0]
+        df['DATA_REF'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
+        # Identifica coluna de atendente
+        possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável", "Nome"]
+        col_atendente = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
+        # Mapeia
+        df['Tec_Formatado'] = df[col_atendente].apply(lambda x: next((k for k, v in MAPEAMENTO_TECNICOS.items() if super_limpeza(v) in super_limpeza(str(x))), None))
+        df_tec = df[df['Tec_Formatado'] == tecnico].dropna(subset=['DATA_REF'])
+
+    # 2. TRATAMENTO TME (PLANILHA)
+    mapa_tme = {l[0]: l[3:] for l in dados_tme_raw if len(l) > 0}
+    tempos_raw = mapa_tme.get(tecnico, [""] * 31)
+    
+    # Cálculos de Métricas
+    total_enc = len(df_tec)
+    
+    # Cálculo da Média de TME
+    tempos_segundos = [converter_para_segundos(t) for t in tempos_raw[:dia_limite]]
+    tempos_validos = [t for t in tempos_segundos if t is not None]
+    media_tme_seg = sum(tempos_validos) / len(tempos_validos) if tempos_validos else 0
+    tme_formatado = formatar_segundos(media_tme_seg)
+
+    # 3. INTERFACE DE MÉTRICAS
     col1, col2, col3 = st.columns([2,1,1])
-    with col1: st.markdown(f"#### {tecnico}")
-    with col2: st.metric("Total Encerramentos", f"{total} un")
+    with col1: st.markdown(f"### {tecnico}")
+    with col2: st.metric("Total Encerramentos", f"{total_enc} un")
+    with col3: st.metric("TME Médio (Mês)", tme_formatado)
     
-    st.progress(min(total/550, 1.0), text=f"Meta Normal (550): {total}")
-    st.progress(min(total/681, 1.0), text=f"Super Meta (681): {total}")
+    st.progress(min(total_enc/550, 1.0), text=f"Meta Normal (550): {total_enc}")
+    st.progress(min(total_enc/681, 1.0), text=f"Super Meta (681): {total_enc}")
     
     st.divider()
+    
+    # 4. GRID DIÁRIO
     grid = st.columns(7)
-    counts = df_tec['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec.empty else {}
-    mapa_tme = {l[0]: l[3:] for l in dados_tme if len(l) > 0}
-    tempos = mapa_tme.get(tecnico, [""] * 31)
+    counts_diario = df_tec['DATA_REF'].dt.day.value_counts().to_dict()
 
     for i in range(dia_limite):
         dia = i + 1
         with grid[i % 7]:
-            qtd = counts.get(dia, 0)
-            tme = str(tempos[i]).strip() if i < len(tempos) else ""
-            cor = "#FF4B4B" if converter_para_segundos(tme) and converter_para_segundos(tme) > 15 else "#FFFFFF"
-            if tme in ["", "FORA"]: cor = "#FFD700"
+            qtd = counts_diario.get(dia, 0)
+            tme_dia = str(tempos_raw[i]).strip() if i < len(tempos_raw) else ""
+            
+            # Lógica de cor do TME diário
+            seg_dia = converter_para_segundos(tme_dia)
+            cor_tme = "#FFFFFF"
+            if tme_dia in ["", "FORA"]: cor_tme = "#FFD700"
+            elif seg_dia and seg_dia > 900: # Exemplo: Alerta se maior que 15 min
+                cor_tme = "#FF4B4B"
 
             st.markdown(f"""
                 <div style="background:#1d2129; padding:8px; border-radius:8px; border:1px solid #30363d; margin-bottom:8px; text-align:center;">
-                    <small>{dia:02d}/{mes:02d}</small><br>
-                    <b style="color:#4da3ff;">E: {qtd}</b><br>
-                    <small style="color:{cor};">⏱️ {tme or '---'}</small>
+                    <small style="color:#8b949e;">{dia:02d}/{mes:02d}</small><br>
+                    <b style="color:#4da3ff; font-size:1.1rem;">E: {qtd}</b><br>
+                    <small style="color:{cor_tme};">⏱️ {tme_dia or '---'}</small>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -254,19 +264,25 @@ def render():
     
     agora = datetime.now(pytz.timezone('America/Sao_Paulo'))
     dados_planilha = load_technical_data()
-    if not dados_planilha: return
+    if not dados_planilha:
+        st.error("Falha ao carregar dados da Planilha Master.")
+        return
     
     nomes = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-    selecionado = st.selectbox("Técnico:", nomes)
+    selecionado = st.selectbox("Selecione o Técnico:", nomes)
 
-    # Coleta em massa (Mês anterior + Mês atual)
+    # Coleta
     banco = sincronizar_periodo_completo()
 
     tab1, tab2 = st.tabs([f"📅 Mês Atual", f"⏪ Mês Anterior"])
 
     with tab1:
-        desenhar_aba(dados_planilha, banco['atual'], selecionado, agora.month, agora.year, agora.day - 1)
+        if banco['atual'] is None:
+            st.warning("Dados do mês atual não disponíveis ou falha na coleta.")
+        desenhar_aba(dados_planilha, banco['atual'], selecionado, agora.month, agora.year, agora.day)
     
     with tab2:
         dt_p = agora.replace(day=1) - timedelta(days=1)
+        if banco['passado'] is None:
+            st.warning("Dados do mês anterior não disponíveis.")
         desenhar_aba(dados_planilha, banco['passado'], selecionado, dt_p.month, dt_p.year, calendar.monthrange(dt_p.year, dt_p.month)[1])
