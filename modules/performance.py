@@ -71,11 +71,31 @@ def load_technical_data():
     try:
         from google.oauth2.service_account import Credentials
         creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=["https://www.googleapis.com/auth/spreadsheets.readonly"])
-        # Intervalo AJ para garantir dias 30 e 31
         return gspread.authorize(creds).open_by_url(url).worksheet("AtendimentoTécnico").get("A8:AJ20")
     except: return None
 
-# --- 3. MOTOR DE AUTOMAÇÃO ---
+# --- 3. EXPORTAÇÃO CSV ---
+def preparar_csv_tme(dados_planilha):
+    """Transforma os dados da planilha em um CSV baixável"""
+    try:
+        # Criar cabeçalho: Nome + Dias 1 a 31
+        colunas = ["Colaborador"] + [f"Dia {i}" for i in range(1, 32)]
+        lista_final = []
+        
+        for linha in dados_planilha:
+            if len(linha) > 0 and linha[0] in MAPEAMENTO_TECNICOS:
+                nome = linha[0]
+                tempos = linha[3:]
+                # Ajusta para ter sempre 31 dias
+                while len(tempos) < 31: tempos.append("")
+                lista_final.append([nome] + tempos[:31])
+        
+        df_export = pd.DataFrame(lista_final, columns=colunas)
+        return df_export.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+    except:
+        return None
+
+# --- 4. MOTOR DE AUTOMAÇÃO ---
 def executar_robo_erp(mes, ano):
     BASE_DIR = Path(__file__).parent.parent
     DOWNLOAD_FOLDER = BASE_DIR / st.secrets["DOWNLOAD_PATH"].strip("/")
@@ -103,7 +123,6 @@ def executar_robo_erp(mes, ano):
         wait = WebDriverWait(driver, 45)
         driver.get(st.secrets["URL_ERP"])
         
-        # Login
         inputs = driver.find_elements(By.ID, ":r0:")
         if inputs:
             inputs[0].send_keys(st.secrets["ERP_USER"])
@@ -111,7 +130,6 @@ def executar_robo_erp(mes, ano):
             driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
             time.sleep(8)
         
-        # Tela antiga e Filtros
         driver.get(f"{st.secrets['URL_ERP']}#/all_solicitations")
         time.sleep(12)
 
@@ -127,7 +145,6 @@ def executar_robo_erp(mes, ano):
             driver.execute_script("arguments[0].click();", item)
             driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
 
-            # Datas
             hj = datetime.now()
             data_ini = f"01/{mes:02d}/{ano}"
             data_fim = hj.strftime("%d/%m/%Y") if (mes == hj.month and ano == hj.year) else f"{calendar.monthrange(ano, mes)[1]:02d}/{mes:02d}/{ano}"
@@ -139,7 +156,6 @@ def executar_robo_erp(mes, ano):
             driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
             time.sleep(12)
 
-            # Exportar
             btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
             driver.execute_script("arguments[0].click();", btn_exp)
             wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
@@ -166,7 +182,7 @@ def sincronizar_periodo_completo():
     banco['atual'] = executar_robo_erp(agora.month, agora.year)
     return banco
 
-# --- 4. INTERFACE ---
+# --- 5. INTERFACE ---
 def desenhar_aba(dados_tme_raw, df_bruto, tecnico_sel, mes, ano, dia_limite):
     df_tec = pd.DataFrame(columns=['DATA_REF', 'Tec_Formatado'])
     if df_bruto is not None and not df_bruto.empty:
@@ -227,8 +243,24 @@ def render():
     
     nomes = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
     
+    # --- CABEÇALHO COM BOTÃO DE EXPORTAR ---
     st.markdown("### 📈 Painel de Performance")
-    selecionado = st.selectbox("Selecione o Técnico:", nomes)
+    
+    col_sel, col_exp = st.columns([3, 1])
+    
+    with col_sel:
+        selecionado = st.selectbox("Selecione o Técnico:", nomes, label_visibility="collapsed")
+    
+    with col_exp:
+        csv_data = preparar_csv_tme(dados_planilha)
+        if csv_data:
+            st.download_button(
+                label="📥 Exportar TMEs (.csv)",
+                data=csv_data,
+                file_name=f"tme_colaboradores_{agora.strftime('%m_%Y')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
 
     banco = sincronizar_periodo_completo()
     tab1, tab2 = st.tabs([f"📅 Mês Atual", f"⏪ Mês Anterior"])
