@@ -92,7 +92,7 @@ def render():
         shutil.move(arquivo_recente, str(caminho_final.absolute()))
         return str(caminho_final.absolute())
 
-    # --- AUTOMAÇÃO SELENIUM ---
+        # --- AUTOMAÇÃO SELENIUM ---
     @st.cache_data(ttl=900, show_spinner=False)
     def disparar_automacao_cached():
         prog_container = st.empty()
@@ -104,7 +104,7 @@ def render():
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
-
+    
         abs_download_path = str(DOWNLOAD_FOLDER.absolute())
         prefs = {
             "download.default_directory": abs_download_path,
@@ -112,7 +112,7 @@ def render():
             "directory_upgrade": True
         }
         chrome_options.add_experimental_option("prefs", prefs)
-
+    
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
@@ -120,74 +120,68 @@ def render():
             wait = WebDriverWait(driver, 40)
             
             def forcar_input_react(elemento, valor):
-                driver.execute_script("""
-                    var element = arguments[0]; var value = arguments[1];
-                    element.value = value;
-                    element.dispatchEvent(new Event('input', { bubbles: true }));
-                    element.dispatchEvent(new Event('change', { bubbles: true }));
-                    element.blur();
-                """, elemento, valor)
-
+                script = """
+                var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
+                element.value = value; var event = new Event('input', { bubbles: true });
+                var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); }
+                element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
+                """
+                driver.execute_script(script, elemento, valor)
+    
             # 1. Login
-            p_bar.progress(10, text="🔐 Efetuando Login...")
+            p_bar.progress(10, text="Login...")
             driver.get(URL_ERP)
             time.sleep(5)
-            
-            # Tenta localizar campos de login com seletores mais flexíveis
-            user_field = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='text'], input#\\:r0\\:")))
-            pass_field = driver.find_element(By.CSS_SELECTOR, "input[type='password'], input#\\:r1\\:")
-            
-            forcar_input_react(user_field, ERP_USER)
-            forcar_input_react(pass_field, ERP_PASS)
-            
-            btn_login = driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]")
-            driver.execute_script("arguments[0].click();", btn_login)
-            time.sleep(8)
-
+            try:
+                c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
+                c_pass = driver.find_element(By.ID, ":r1:")
+                forcar_input_react(c_user, ERP_USER)
+                forcar_input_react(c_pass, ERP_PASS) 
+                driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
+                time.sleep(10)
+            except: pass
+    
             # 2. Tela Antiga
-            p_bar.progress(30, text="🔐 Efetuando Login...")
+            p_bar.progress(30, text="Acessando a Tela Antiga...")
             try:
                 btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
                 driver.execute_script("arguments[0].click();", btn_ant)
                 time.sleep(6)
             except: pass
-            # 2. Navegação e Filtros
-            p_bar.progress(40, text="🔍 Aplicando filtros...")
-            driver.get(URL_ERP)
-            time.sleep(5)
-            
-            wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-            time.sleep(3)
-
-            # Seleção de Equipe
-            wait.until(EC.element_to_be_clickable((By.ID, "teamId"))).click()
-            time.sleep(1)
-            f_all = wait.until(EC.presence_of_element_located((By.ID, "filterAll")))
-            f_all.send_keys("COP Encerramentos")
-            time.sleep(2)
-            f_all.send_keys(Keys.ENTER)
-            time.sleep(2)
-            
-            wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(., 'COP Encerramentos')]"))).click()
-            driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
-
-            # Datas
-            hj = datetime.now()
-            ultimo_dia = calendar.monthrange(hj.year, hj.month)[1]
-            data_ini = f"01/{hj.month:02d}/{hj.year}"
-            data_fim = f"{ultimo_dia:02d}/{hj.month:02d}/{hj.year}"
-            
-            # Limpeza via JS para garantir que o campo aceite o novo valor
-            driver.execute_script("document.getElementById('beginReportClosingDate').value = '';")
-            forcar_input_react(driver.find_element(By.ID, "beginReportClosingDate"), data_ini)
-            
-            driver.execute_script("document.getElementById('finalReportClosingDate').value = '';")
-            forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), data_fim)
-            
-            time.sleep(2)
-            driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-            time.sleep(10)
-
+            # 3. Filtros
+            p_bar.progress(60)
+            try:
+                driver.get(URL_ERP)
+                time.sleep(5)
+                wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
+                time.sleep(3)
+    
+                driver.find_element(By.ID, "teamId").click()
+                time.sleep(1)
+                f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+                f_all.send_keys("COP Encerramentos")
+                f_all.send_keys(Keys.ENTER)
+                time.sleep(3)
+                wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
+                time.sleep(1)
+                driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+    
+                # Limpeza datas
+                driver.execute_script("""
+                    ['beginInitialDate', 'endInitialDate'].forEach(id => {
+                        var el = document.getElementById(id);
+                        if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
+                    });
+                """)
+    
+                hj = datetime.now()
+                fim = hj.replace(day=calendar.monthrange(hj.year, hj.month)[1]).strftime("%d/%m/%Y")
+                forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), fim)
+                time.sleep(2)
+                driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
+                time.sleep(12)
+            except: pass
+    
             # 3. Exportação
             p_bar.progress(80, text="📥 Baixando CSV...")
             btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
@@ -206,14 +200,14 @@ def render():
             
             hora_br = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")
             return {"dados": analisar_dados_encerramentos(caminho), "horario": hora_br}
-
+    
         except Exception as e:
             st.error(f"Ocorreu um erro no robô: {str(e)}")
             return None
         finally:
             if driver:
                 driver.quit()
-
+    
     # --- LÓGICA DE EXIBIÇÃO (REVISADA) ---
     st.title("🚀 É A EQUIPE DO ENCERRAS!!!")
     
@@ -221,7 +215,7 @@ def render():
     if st.button("🔄 Atualizar Agora"):
         st.cache_data.clear()
         st.rerun()
-
+    
     resultado = disparar_automacao_cached()
     
     if resultado and resultado.get("dados") is not None:
@@ -234,10 +228,10 @@ def render():
             mes_atual_str = hoje.strftime('%m/%Y')
             
             meses_disponiveis = sorted(df_completo['MES_ANO'].dropna().unique(), 
-                                       key=lambda x: datetime.strptime(x, '%m/%Y'), reverse=True)
-
+                                        key=lambda x: datetime.strptime(x, '%m/%Y'), reverse=True)
+    
             tab_geral, tab_ranking, tab_individual = st.tabs(["📊 Visão Geral", "🏆 Ranking Mensal", "👤 Individual"])
-
+    
             with tab_geral:
                 df_mes = df_completo[df_completo['MES_ANO'] == mes_atual_str]
                 if not df_mes.empty:
@@ -250,7 +244,7 @@ def render():
                     c3.metric("Líder", f"{stats.iloc[0]['Atendente'].split()[0]}", f"{stats.iloc[0]['Encerras']} un")
                     st.dataframe(stats, use_container_width=True)
                 else: st.info(f"Sem dados para {mes_atual_str}.")
-
+    
             with tab_ranking:
                 if meses_disponiveis:
                     abas_rank = st.tabs(meses_disponiveis[:3] + ["🏆 Ranking Geral"])
@@ -263,7 +257,7 @@ def render():
                         df_geral = df_completo['Atendente'].value_counts().reset_index()
                         df_geral.columns = ['Atendente', 'Total Acumulado']; df_geral.index = df_geral.index + 1
                         st.table(df_geral)
-
+    
             with tab_individual:
                 atendentes = sorted(df_completo['Atendente'].unique())
                 if atendentes:
@@ -280,3 +274,4 @@ def render():
                     with col2: st.line_chart(hist.set_index('MES_INICIO')['Encerras'])
         else: st.warning("⚠️ Nenhum dado encontrado no CSV.")
     else: st.info("⏳ Aguardando sincronização do ERP (isso pode levar 1 minuto)...")
+
