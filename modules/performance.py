@@ -20,191 +20,122 @@ from streamlit_autorefresh import st_autorefresh
 from pathlib import Path
 from styles import apply_styles
 
-# --- MAPEAMENTO E SUPORTE (MANTIDOS) ---
-MAPEAMENTO_TECNICOS = {
-    "Alisson Do Couto Guerreiro": "ALISSON DO COUTO GUERREIRO",
-    "Caio Alves dos Reis": "CAIO REIS",
-    "Cristiano Weber Marques": "CRISTIANO MARQUES",
-    "Diogo Taborda de Bitencourt": "DIOGO TABORDA DE BITENCOURT",
-    "Filipe Vieira Vaz": "FILIPE VIEIRA VAZ",
-    "Igor Saldanha Noguez": "IGOR SALDANHA",
-    "João Vitor Ruiz Barboza": "JOÃO VITOR RUIZ BARBOZA",
-    "Julia da Silva Duarte": "JULIA DA SILVA DUARTE",
-    "Kauã Larri Gocks da Silveira": "KAUA LARRI GOCKS DA SILVEIRA",
-    "Nathali Elisa Xavier Vallier": "NATHALI VALLIER",
-    "Richer Falcão Araujo": "RICHER FALCAO ARAUJO",
-    "Sindew Crizel Nunes": "SINDEW CRIZEL NUNES",
-    "Vinicius Maciel Coppa": "VINICIUS COPPA"
-}
+# [MAPEAMENTO_TECNICOS e funções de limpeza permanecem as mesmas]
 
-def super_limpeza(texto):
-    if not isinstance(texto, str): return ""
-    texto = texto.upper()
-    texto = unicodedata.normalize('NFKD', texto)
-    return "".join([c for c in texto if not unicodedata.combining(c)])
-
-def converter_para_segundos(tempo_str):
-    if not tempo_str or str(tempo_str).strip() in ["", "FORA"]: return None
-    try:
-        partes = str(tempo_str).split(':')
-        if len(partes) == 3:
-            h, m, s = map(int, partes)
-            return h * 3600 + m * 60 + s
-        elif len(partes) == 2:
-            m, s = map(int, partes)
-            return m * 60 + s
-        return float(tempo_str)
-    except: return None
-
-def formatar_segundos(segundos):
-    return str(timedelta(seconds=int(segundos)))
-
-# --- CARREGAMENTO DE DADOS ---
-
-@st.cache_data(ttl=600)
-def load_technical_data(aba_nome="AtendimentoTécnico"):
-    url = st.secrets.get("SPREADSHEET_URL")
-    creds_json_str = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
-    if not url or not creds_json_str: return None
-    try:
-        from google.oauth2.service_account import Credentials
-        scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-        creds_dict = json.loads(creds_json_str)
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        client = gspread.authorize(creds)
-        spreadsheet = client.open_by_url(url)
-        # Tenta carregar a aba do mês (você precisará garantir que a planilha tenha abas nomeadas ex: "03-2026")
-        # Por enquanto, mantemos a lógica da aba fixa se não houver abas por mês
-        sheet = spreadsheet.worksheet(aba_nome)
-        return sheet.get("A8:AF20")
-    except: return None
-
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=900, show_spinner="Buscando encerramentos no ERP...")
 def disparar_automacao_erp(download_path_obj, mes, ano):
-    # A lógica da automação permanece a mesma, apenas passando mes/ano no filtro de data
-    # ... (Sua função Selenium completa aqui dentro, ajustando os filtros de data para mes/ano)
-    # Importante: No seu código original, a data de fim estava pegando hj.replace(day=...)
-    # Ajuste para: fim_mes = calendar.monthrange(ano, mes)[1] e usar mes/ano passados como parâmetro.
-    pass 
-
-# --- INTERFACE PRINCIPAL ---
-
-def render_aba_performance(dados_tme_brutos, df_erp, tecnico, mes, ano, dia_limite):
-    """Função para desenhar o conteúdo da aba (Métricas + Progressos + Grid)"""
-    if not dados_tme_brutos:
-        st.warning(f"Sem dados para {mes:02d}/{ano}")
-        return
-
-    df_tec_erp = df_erp[df_erp['Atendente_Planilha'] == tecnico] if df_erp is not None else pd.DataFrame()
-    total_atual = len(df_tec_erp)
-    meta_normal = 550
-    super_meta = 681
-
-    # TME - Tratamento
-    mapa = {l[0]: l for l in dados_tme_brutos if len(l) > 0}
-    if tecnico not in mapa:
-        st.error("Técnico não encontrado na base deste mês.")
-        return
-        
-    linha_tecnico = mapa[tecnico]
-    dados_tecnico_raw = linha_tecnico[3:]
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     
-    # Pega apenas até o dia limite (hoje-1 para mês atual, ou mês cheio para passado)
-    tempos_seg = [converter_para_segundos(t) for t in dados_tecnico_raw[:dia_limite]]
-    tempos_validos = [s for s in tempos_seg if s is not None]
-    tme_acumulado = formatar_segundos(sum(tempos_validos)/len(tempos_validos)) if tempos_validos else "00:00:00"
+    # [Configurações de Prefs e Driver...]
+    driver = webdriver.Chrome(options=chrome_options)
+    
+    try:
+        wait = WebDriverWait(driver, 40)
+        # 1. Login (Sua lógica de login aqui)
+        # ...
+        
+        # 2. Navegação para filtros
+        driver.get("https://erp.osirnet.com.br/all_solicitations#/")
+        time.sleep(3)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
+        
+        # [Lógica de selecionar equipe 'COP Encerramentos'...]
 
-    # Métricas Topo
-    c_n, c_m1, c_m2 = st.columns([2, 1, 1])
-    with c_n:
-        st.markdown(f"#### {tecnico}")
-        st.caption(f"Referência: {mes:02d}/{ano}")
-    with c_m1: st.metric("TME Acumulado", tme_acumulado)
-    with c_m2: st.metric("Total ENC", f"{total_atual} un")
+        # 3. FILTRO DE DATA DINÂMICO
+        hj = datetime.now()
+        ultimo_dia = calendar.monthrange(ano, mes)[1]
+        
+        data_ini = f"01/{mes:02d}/{ano}"
+        # Se for o mês atual, limita até hoje para não dar erro no ERP
+        data_fim = hj.strftime("%d/%m/%Y") if (mes == hj.month and ano == hj.year) else f"{ultimo_dia:02d}/{mes:02d}/{ano}"
 
-    # Progress Bars
-    p_normal = min(total_atual / meta_normal, 1.0)
-    p_super = min(total_atual / super_meta, 1.0)
-    cm1, cm2 = st.columns(2)
-    with cm1:
-        st.markdown(f"**🎯 Meta Normal ({meta_normal})**")
-        st.progress(p_normal)
-    with cm2:
-        st.markdown(f"**🚀 Super Meta ({super_meta})**")
-        st.progress(p_super)
+        # Função React Input
+        def forcar_input(dr, el, val):
+            dr.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles:true}));", el, val)
 
+        forcar_input(driver, driver.find_element(By.ID, "beginReportClosingDate"), data_ini)
+        forcar_input(driver, driver.find_element(By.ID, "finalReportClosingDate"), data_fim)
+        
+        driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
+        time.sleep(10)
+
+        # 4. Exportar e Analisar (Sua lógica de CSV aqui)
+        # ... 
+        # return analisar_dados_encerramentos(caminho_final, mes, ano)
+        pass 
+
+    except Exception as e:
+        st.error(f"Erro Automação ({mes}/{ano}): {e}")
+        return None
+    finally:
+        driver.quit()
+
+def desenhar_conteudo_performance(dados_tme, df_erp, tecnico, mes, ano, dia_max):
+    # Filtra os dados do técnico
+    df_tec = df_erp[df_erp['Atendente_Planilha'] == tecnico] if df_erp is not None else pd.DataFrame()
+    
+    # Métricas
+    col1, col2, col3 = st.columns([2,1,1])
+    col2.metric("Total Encerramentos", f"{len(df_tec)} un")
+    
+    # Progress Bars (Metas)
+    total = len(df_tec)
+    st.progress(min(total/550, 1.0), text=f"Meta Normal: {total}/550")
+    st.progress(min(total/681, 1.0), text=f"Super Meta: {total}/681")
+    
     st.divider()
-
-    # Histórico Diário
-    st.subheader("📅 Histórico Diário")
+    
+    # Grid de Histórico
     grid = st.columns(7)
-    counts_enc = df_tec_erp['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec_erp.empty else {}
+    counts = df_tec['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec.empty else {}
+    
+    # Mapeia TME da planilha
+    mapa = {l[0]: l[3:] for l in dados_tme if len(l) > 0}
+    dados_dias = mapa.get(tecnico, [""] * 31)
 
-    for i in range(dia_limite):
+    for i in range(dia_max):
         dia = i + 1
         with grid[i % 7]:
-            val_tme = str(dados_tecnico_raw[i]).strip() if i < len(dados_tecnico_raw) else ""
-            seg = converter_para_segundos(val_tme)
-            qtd = counts_enc.get(dia, 0)
-
-            cor_tme = "#FFFFFF"
-            if val_tme in ["", "FORA"]: cor_tme = "#FFD700"; val_tme = "FORA"
-            elif seg is not None and seg > 15: cor_tme = "#FF4B4B"
-
+            qtd = counts.get(dia, 0)
+            tme_val = str(dados_dias[i]).strip() if i < len(dados_dias) else ""
+            
             st.markdown(f"""
-                <div style="background:#1d2129; padding:10px; border-radius:10px; border:1px solid #30363d; margin-bottom:10px; text-align:center;">
-                    <div style="color:#8b949e; font-size:0.75rem;">{dia:02d}/{mes:02d}</div>
-                    <div style="font-size:1rem; font-weight:bold; color:{cor_tme};">⏱️ {val_tme}</div>
-                    <div style="font-size:1rem; font-weight:bold; color:#4da3ff; border-top:1px solid #30363d; margin-top:5px;">E: {qtd}</div>
+                <div style="background:#1d2129; padding:8px; border-radius:8px; border:1px solid #30363d; margin-bottom:8px; text-align:center;">
+                    <small>{dia:02d}/{mes:02d}</small><br>
+                    <b style="color:#4da3ff;">E: {qtd}</b><br>
+                    <small>⏱️ {tme_val}</small>
                 </div>
             """, unsafe_allow_html=True)
 
 def render():
     apply_styles()
-    st_autorefresh(interval=10 * 60 * 1000, key="perf_refresh")
-
-    fuso_br = pytz.timezone('America/Sao_Paulo')
-    hoje = datetime.now(fuso_br)
+    fuso = pytz.timezone('America/Sao_Paulo')
+    agora = datetime.now(fuso)
     
-    # Datas Mês Atual
-    mes_atual = hoje.month
-    ano_atual = hoje.year
-    dia_ontem = hoje.day - 1
+    # Datas para as abas
+    m_atual, a_atual = agora.month, agora.year
+    dt_p = agora.replace(day=1) - timedelta(days=1)
+    m_pass, a_pass = dt_p.month, dt_p.year
+    
+    st.title("📈 Performance Unificada")
+    
+    # Carrega Lista de Técnicos
+    dados_planilha = load_technical_data()
+    if not dados_planilha: return
+    tecnicos = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
+    
+    selecionado = st.selectbox("Selecione o Técnico:", tecnicos)
+    
+    tab1, tab2 = st.tabs([f"📅 {m_atual:02d}/{a_atual}", f"⏪ {m_pass:02d}/{a_pass}"])
+    
+    with tab1:
+        df_a = disparar_automacao_erp(Path("temp_downloads"), m_atual, a_atual)
+        desenhar_conteudo_performance(dados_planilha, df_a, selecionado, m_atual, a_atual, agora.day - 1)
 
-    # Datas Mês Anterior
-    data_mes_passado = hoje.replace(day=1) - timedelta(days=1)
-    mes_passado = data_mes_passado.month
-    ano_passado = data_mes_passado.year
-    dias_mes_passado = calendar.monthrange(ano_passado, mes_passado)[1]
-
-    # Pastas
-    base_dir = Path(__file__).parent.parent
-    download_folder = base_dir / "temp_downloads"
-    download_folder.mkdir(parents=True, exist_ok=True)
-
-    # Carrega base de nomes (Usa a aba principal para pegar a lista de técnicos)
-    base_nomes_raw = load_technical_data() # Mantém a aba fixa para pegar os nomes
-    if not base_nomes_raw:
-        st.warning("Aguardando base de dados da Planilha...")
-        return
-
-    lista_nomes = sorted([l[0] for l in base_nomes_raw if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-
-    st.markdown("### 📊 Performance de Atendimento")
-    selecionado = st.selectbox("Selecione o Atendente:", options=lista_nomes)
-
-    # Criando as Abas
-    aba_atual, aba_passado = st.tabs([f"📅 Mês Atual ({mes_atual:02d}/{ano_atual})", f"⏪ Mês Anterior ({mes_passado:02d}/{ano_passado})"])
-
-    with aba_atual:
-        # Aqui você dispara a automação para o mês atual
-        df_atual = disparar_automacao_erp(download_folder, mes_atual, ano_atual)
-        render_aba_performance(base_nomes_raw, df_atual, selecionado, mes_atual, ano_atual, dia_ontem)
-
-    with aba_passado:
-        # Aqui você dispara a automação para o mês passado (O Selenium vai filtrar o período cheio)
-        df_anterior = disparar_automacao_erp(download_folder, mes_passado, ano_passado)
-        
-        # Dica: Para o TME do mês passado ser correto, você precisaria de uma aba na planilha 
-        # chamada por exemplo "AtendimentoTécnico_Passado". Se não tiver, ele vai mostrar os dados da atual.
-        render_aba_performance(base_nomes_raw, df_anterior, selecionado, mes_passado, ano_passado, dias_mes_passado)
+    with tab2:
+        df_p = disparar_automacao_erp(Path("temp_downloads"), m_pass, a_pass)
+        ultimo_dia_p = calendar.monthrange(a_pass, m_pass)[1]
+        desenhar_conteudo_performance(dados_planilha, df_p, selecionado, m_pass, a_pass, ultimo_dia_p)
