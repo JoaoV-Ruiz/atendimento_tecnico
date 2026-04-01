@@ -1,3 +1,7 @@
+import streamlit as st
+import pandas as pd
+import gspread
+import json
 import os
 import re
 import time
@@ -5,9 +9,7 @@ import glob
 import shutil
 import calendar
 import unicodedata
-import pandas as pd
-import streamlit as st
-import streamlit.components.v1 as components
+import pytz
 from datetime import datetime, timedelta
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -16,284 +18,234 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 from streamlit_autorefresh import st_autorefresh
-import json
-import traceback
-import pytz
 from pathlib import Path
+from styles import apply_styles
 
-def render():
-    st_autorefresh(interval=5 * 60 * 1000, key="refresh_encerramentos")
-    
-    # --- 1. CONFIGURAÇÃO DE SEGREDOS E CAMINHOS (PATHLIB) ---
-    ERP_USER = st.secrets["ERP_USER"]
-    ERP_PASS = st.secrets["ERP_PASS"]
-    
-    # Define a raiz do projeto (sobe dois níveis de modules/encerramentos.py)
+# --- 1. CONFIGURAÇÕES E MAPEAMENTO ---
+MAPEAMENTO_TECNICOS = {
+    "Alisson Do Couto Guerreiro": "ALISSON DO COUTO GUERREIRO",
+    "Caio Alves dos Reis": "CAIO REIS",
+    "Cristiano Weber Marques": "CRISTIANO MARQUES",
+    "Diogo Taborda de Bitencourt": "DIOGO TABORDA DE BITENCOURT",
+    "Filipe Vieira Vaz": "FILIPE VIEIRA VAZ",
+    "Igor Saldanha Noguez": "IGOR SALDANHA",
+    "João Vitor Ruiz Barboza": "JOÃO VITOR RUIZ BARBOZA",
+    "Julia da Silva Duarte": "JULIA DA SILVA DUARTE",
+    "Kauã Larri Gocks da Silveira": "KAUA LARRI GOCKS DA SILVEIRA",
+    "Nathali Elisa Xavier Vallier": "NATHALI VALLIER",
+    "Richer Falcão Araujo": "RICHER FALCAO ARAUJO",
+    "Sindew Crizel Nunes": "SINDEW CRIZEL NUNES",
+    "Vinicius Maciel Coppa": "VINICIUS COPPA"
+}
+
+# --- 2. FUNÇÕES DE APOIO ---
+def super_limpeza(texto):
+    if not isinstance(texto, str): return ""
+    texto = texto.upper()
+    texto = unicodedata.normalize('NFKD', texto)
+    texto = "".join([c for c in texto if not unicodedata.combining(c)])
+    return re.sub(r'[^A-Z]', '', texto)
+
+def converter_para_segundos(tempo_str):
+    if not tempo_str or str(tempo_str).strip() in ["", "FORA"]: return None
+    try:
+        partes = str(tempo_str).split(':')
+        if len(partes) == 3:
+            h, m, s = map(int, partes)
+            return h * 3600 + m * 60 + s
+        elif len(partes) == 2:
+            m, s = map(int, partes)
+            return m * 60 + s
+        return float(tempo_str)
+    except: return None
+
+def formatar_segundos(segundos):
+    return str(timedelta(seconds=int(segundos)))
+
+@st.cache_data(ttl=600)
+def load_technical_data():
+    url = st.secrets.get("SPREADSHEET_URL")
+    creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2") or st.secrets.get("GOOGLE_JSON_CREDENTIALS")
+    if not url or not creds_json: return None
+    try:
+        from google.oauth2.service_account import Credentials
+        scope = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+        creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=scope)
+        client = gspread.authorize(creds)
+        return client.open_by_url(url).worksheet("AtendimentoTécnico").get("A8:AF20")
+    except: return None
+
+def analisar_dados_csv(caminho_csv, mes, ano):
+    if not caminho_csv or not os.path.exists(caminho_csv): return None
+    try:
+        df = pd.read_csv(caminho_csv, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
+        col_data = [c for c in df.columns if "Encerramento" in c][0]
+        df['DATA_REF'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
+        
+        possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável"]
+        col_tec = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
+        
+        # Mapeamento reverso para bater com os nomes da planilha
+        df['Atendente_Planilha'] = df[col_tec].apply(lambda x: next((k for k, v in MAPEAMENTO_TECNICOS.items() if super_limpeza(v) in super_limpeza(str(x))), None))
+        
+        return df[(df['DATA_REF'].dt.month == mes) & (df['DATA_REF'].dt.year == ano)].dropna(subset=['Atendente_Planilha'])
+    except: return None
+
+# --- 3. AUTOMAÇÃO ERP ---
+@st.cache_data(ttl=900, show_spinner="Sincronizando com ERP...")
+def disparar_automacao_erp(mes, ano):
     BASE_DIR = Path(__file__).parent.parent
-
-    # Pega os nomes das pastas dos Secrets e garante que são objetos Path
-    NOME_DOWNLOAD = st.secrets["DOWNLOAD_PATH"].strip("/")
-    NOME_DESTINO = st.secrets["DESTINO_PATH"].strip("/")
-
-    DOWNLOAD_FOLDER = BASE_DIR / NOME_DOWNLOAD
-    DESTINO_FOLDER = BASE_DIR / NOME_DESTINO
-
-    # Cria as pastas no servidor
+    DOWNLOAD_FOLDER = BASE_DIR / "temp_downloads"
+    DESTINO_FOLDER = BASE_DIR / "data_storage"
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    URL_ERP = st.secrets["URL_ERP"]
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1920,1080")
+
+    abs_path = str(DOWNLOAD_FOLDER.absolute())
+    prefs = {"download.default_directory": abs_path}
+    chrome_options.add_experimental_option("prefs", prefs)
+
+    driver = webdriver.Chrome(options=chrome_options)
+    driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_path})
     
-    # --- 2. FUNÇÕES DE APOIO ---
-    def super_limpeza(texto):
-        if not isinstance(texto, str): return ""
-        texto = texto.split(" / ")[0].upper()
-        texto = unicodedata.normalize('NFKD', texto)
-        texto = "".join([c for c in texto if not unicodedata.combining(c)])
-        return re.sub(r'[^A-Z]', '', texto)
+    try:
+        wait = WebDriverWait(driver, 40)
+        driver.get(st.secrets["URL_ERP"])
+        
+        def forcar_input(el, val):
+            driver.execute_script("arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles:true}));", el, val)
 
-    def identificar_pela_chave(nome_bruto_csv, termos_busca):
-        if pd.isna(nome_bruto_csv) or "Sem Atendente" in str(nome_bruto_csv): return None
-        nome_limpo_csv = super_limpeza(str(nome_bruto_csv))
-        for chave_limpa, nome_bonito in termos_busca.items():
-            if chave_limpa in nome_limpo_csv: return nome_bonito
-        return None
-
-    def analisar_dados_encerramentos(caminho_csv):
-        if caminho_csv is None or not os.path.exists(caminho_csv):
-            return None
+        # 1. Login
         try:
-            termos_busca = {
-                "ALISSONDOCOUTOGUERREIRO": "ALISSON DO COUTO GUERREIRO", "IGORSALDANHA": "IGOR SALDANHA",
-                "JOAOVITORRUIZBARBOZA": "JOÃO VITOR RUIZ BARBOZA", "VINICIUSCOPPA": "VINICIUS COPPA",
-                "JULIADASILVADUARTE": "JULIA DA SILVA DUARTE", "KAULARRIGOCKSDASILVEIRA": "KAUÃ LARRI GOCKS DA SILVEIRA",
-                "KAUALARRIGOCKSDASILVEIRA": "KAUÃ LARRI GOCKS DA SILVEIRA", "CAIOREIS": "CAIO REIS",
-                "DIOGOTABORDADEBITENCOURT": "DIOGO BITENCOURT", "MARIAEDUARDABARBOSAVIANA": "MARIA EDUARDA BARBOSA VIANA",
-                "NATHALIVALLIER": "NATHALI VALLIER", "RICHERFALCAOARAUJO": "RICHER FALCÃO ARAUJO",
-                "SINDEWCRIZELNUNES": "SINDEW CRIZEL NUNES", "CRISTIANOMARQUES": "CRISTIANO MARQUES",
-                "FILIPEVIEIRAVAZ": "FILIPE VIEIRA VAZ"
-            }
-            df = pd.read_csv(caminho_csv, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
-            col_encontrada = [c for c in df.columns if "Encerramento" in c]
-            if not col_encontrada: return None
-            
-            df['DATA_REF'] = pd.to_datetime(df[col_encontrada[0]], dayfirst=True, errors='coerce')
-            df['MES_ANO'] = df['DATA_REF'].dt.strftime('%m/%Y')
-            
-            possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável", "Nome"]
-            coluna_tecnico = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
-            
-            df['Atendente'] = df[coluna_tecnico].apply(lambda x: identificar_pela_chave(x, termos_busca))
-            return df.dropna(subset=['Atendente', 'DATA_REF']).copy()
-        except Exception as e:
-            st.error(f"Erro na análise do CSV: {e}")
-            return None
+            u = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
+            p = driver.find_element(By.ID, ":r1:")
+            forcar_input(u, st.secrets["ERP_USER"])
+            forcar_input(p, st.secrets["ERP_PASS"])
+            driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
+            time.sleep(8)
+        except: pass
 
-    def mover_arquivo_recente():
-        timeout = 60
-        path_str = str(DOWNLOAD_FOLDER.absolute())
-        for _ in range(timeout):
-            if not any(f.endswith(".crdownload") for f in os.listdir(path_str)): break
-            time.sleep(1)
+        # 2. Filtros Avançados
+        driver.get(st.secrets["URL_ERP"])
+        time.sleep(5)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
+        time.sleep(3)
+
+        # Seleção de Equipe
+        driver.find_element(By.ID, "teamId").click()
+        time.sleep(1)
+        f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
+        f_all.send_keys("COP Encerramentos")
+        f_all.send_keys(Keys.ENTER)
+        time.sleep(3)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
+        driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+
+        # Datas Dinâmicas
+        hj = datetime.now()
+        data_ini = f"01/{mes:02d}/{ano}"
+        if mes == hj.month and ano == hj.year:
+            data_fim = hj.strftime("%d/%m/%Y")
+        else:
+            data_fim = f"{calendar.monthrange(ano, mes)[1]:02d}/{mes:02d}/{ano}"
+
+        forcar_input(driver.find_element(By.ID, "beginReportClosingDate"), data_ini)
+        forcar_input(driver.find_element(By.ID, "finalReportClosingDate"), data_fim)
         
-        arquivos = glob.glob(os.path.join(path_str, "*"))
-        if not arquivos: return None
-        
-        arquivo_recente = max(arquivos, key=os.path.getmtime)
-        nome_arq = os.path.basename(arquivo_recente)
-        caminho_final = DESTINO_FOLDER / nome_arq
-        
-        shutil.move(arquivo_recente, str(caminho_final.absolute()))
-        return str(caminho_final.absolute())
+        driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
+        time.sleep(12)
 
-    # --- 3. AUTOMAÇÃO SELENIUM ---
-    @st.cache_data(ttl=300, show_spinner=False)
-    def disparar_automacao_cached():
-        prog_container = st.empty()
-        text_container = st.empty()
-        p_bar = prog_container.progress(0)
-        status_text = text_container.text("🚀 Robô em ação...")
+        # Exportação
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']"))).click()
+        driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
         
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-
-        abs_download_path = str(DOWNLOAD_FOLDER.absolute())
-        prefs = {
-            "download.default_directory": abs_download_path,
-            "download.prompt_for_download": False,
-            "directory_upgrade": True,
-            "safebrowsing.enabled": True
-        }
-        chrome_options.add_experimental_option("prefs", prefs)
-
-        driver = None
-        try:
-            driver = webdriver.Chrome(options=chrome_options)
+        # Aguarda Download
+        time.sleep(15)
+        arquivos = glob.glob(os.path.join(abs_path, "*"))
+        if arquivos:
+            recente = max(arquivos, key=os.path.getmtime)
+            caminho_final = DESTINO_FOLDER / os.path.basename(recente)
+            shutil.move(recente, str(caminho_final.absolute()))
+            return analisar_dados_csv(str(caminho_final.absolute()), mes, ano)
             
-            # Comando CRÍTICO para habilitar downloads no modo Headless do Linux
-            driver.execute_cdp_cmd("Page.setDownloadBehavior", {
-                "behavior": "allow",
-                "downloadPath": abs_download_path
-            })
+    except Exception as e:
+        st.error(f"Erro Automação ({mes}/{ano}): {e}")
+    finally:
+        driver.quit()
+    return None
 
-            wait = WebDriverWait(driver, 35)
-            
-            def forcar_input_react(elemento, valor):
-                script = """
-                var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
-                element.value = value; var event = new Event('input', { bubbles: true });
-                var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); }
-                element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
-                """
-                driver.execute_script(script, elemento, valor)
-
-            # 1. Login
-            status_text.text("🔐 Efetuando Login...")
-            p_bar.progress(20)
-            driver.get(URL_ERP)
-            time.sleep(5)
-            try:
-                c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
-                c_pass = driver.find_element(By.ID, ":r1:")
-                forcar_input_react(c_user, ERP_USER)
-                forcar_input_react(c_pass, ERP_PASS) 
-                driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
-                time.sleep(10)
-            except: pass
-
-            # 2. Tela Antiga
-            status_text.text("⚙️ Acessando interface...")
-            p_bar.progress(40)
-            try:
-                btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
-                driver.execute_script("arguments[0].click();", btn_ant)
-                time.sleep(6)
-            except: pass
-
-            # 3. Filtros
-            status_text.text("🔍 Aplicando filtros...")
-            p_bar.progress(60)
-            try:
-                driver.get(URL_ERP)
-                time.sleep(5)
-                wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-                time.sleep(3)
-
-                driver.find_element(By.ID, "teamId").click()
-                time.sleep(1)
-                f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
-                f_all.send_keys("COP Encerramentos")
-                f_all.send_keys(Keys.ENTER)
-                time.sleep(3)
-                wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
-                time.sleep(1)
-                driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
-
-                # Limpeza datas
-                driver.execute_script("""
-                    ['beginInitialDate', 'endInitialDate'].forEach(id => {
-                        var el = document.getElementById(id);
-                        if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
-                    });
-                """)
-
-                hj = datetime.now()
-                fim = hj.replace(day=calendar.monthrange(hj.year, hj.month)[1]).strftime("%d/%m/%Y")
-                forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), fim)
-                time.sleep(2)
-                driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-                time.sleep(12)
-            except: pass
-
-            # 4. Exportação
-            status_text.text("📥 Baixando CSV...")
-            p_bar.progress(85)
-            try:
-                btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
-                driver.execute_script("arguments[0].click();", btn_exp)
-                time.sleep(2)
-                driver.find_element(By.XPATH, "//button[contains(., '.CSV')]").click()
-                
-                time.sleep(30) # Tempo maior para o servidor processar
-                caminho = mover_arquivo_recente()
-                
-                if caminho is None:
-                    return None
-
-                status_text.text("✅ Sincronizado!")
-                p_bar.progress(100)
-                time.sleep(1)
-                prog_container.empty()
-                text_container.empty()
-                
-                hora_br = datetime.now(pytz.timezone('America/Sao_Paulo')).strftime("%H:%M:%S")
-                return {"dados": analisar_dados_encerramentos(caminho), "horario": hora_br}
-            except: return None
-                
-        finally:
-            if driver: driver.quit()
-
-    # --- 4. INTERFACE STREAMLIT ---
-    st.title("🚀 É A EQUIPE DO ENCERRAS!!!")
-    resultado = disparar_automacao_cached()
+# --- 4. RENDERIZAÇÃO DA INTERFACE ---
+def desenhar_conteudo(dados_tme, df_erp, tecnico, mes, ano, dia_limite):
+    df_tec = df_erp[df_erp['Atendente_Planilha'] == tecnico] if df_erp is not None else pd.DataFrame()
+    total = len(df_tec)
     
-    if resultado and resultado.get("dados") is not None:
-        df_completo = resultado["dados"]
-        hora = resultado["horario"]
-        
-        if not df_completo.empty:
-            st.markdown(f"**🕒 Última Sincronização:** `{hora}`")
-            hoje = datetime.now(pytz.timezone('America/Sao_Paulo'))
-            mes_atual_str = hoje.strftime('%m/%Y')
+    # Métricas
+    c1, c2, c3 = st.columns([2,1,1])
+    with c1: st.markdown(f"#### {tecnico}")
+    with col2: st.metric("Total Encerramentos", f"{total} un")
+    
+    st.progress(min(total/550, 1.0), text=f"Meta Normal: {total}/550")
+    st.progress(min(total/681, 1.0), text=f"Super Meta: {total}/681")
+    
+    st.divider()
+    
+    # Grid de Histórico
+    grid = st.columns(7)
+    counts = df_tec['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec.empty else {}
+    mapa_tme = {l[0]: l[3:] for l in dados_tme if len(l) > 0}
+    tempos_tecnico = mapa_tme.get(tecnico, [""] * 31)
+
+    for i in range(dia_limite):
+        dia = i + 1
+        with grid[i % 7]:
+            qtd = counts.get(dia, 0)
+            val_tme = str(tempos_tecnico[i]).strip() if i < len(tempos_tecnico) else ""
             
-            meses_disponiveis = sorted(df_completo['MES_ANO'].dropna().unique(), 
-                                       key=lambda x: datetime.strptime(x, '%m/%Y'), reverse=True)
+            # Cor do TME
+            cor = "#FFFFFF"
+            if val_tme in ["", "FORA"]: cor = "#FFD700"
+            elif converter_para_segundos(val_tme) and converter_para_segundos(val_tme) > 15: cor = "#FF4B4B"
 
-            tab_geral, tab_ranking, tab_individual = st.tabs(["📊 Visão Geral", "🏆 Ranking Mensal", "👤 Individual"])
+            st.markdown(f"""
+                <div style="background:#1d2129; padding:8px; border-radius:8px; border:1px solid #30363d; margin-bottom:8px; text-align:center;">
+                    <small>{dia:02d}/{mes:02d}</small><br>
+                    <b style="color:#4da3ff;">E: {qtd}</b><br>
+                    <small style="color:{cor};">⏱️ {val_tme or '---'}</small>
+                </div>
+            """, unsafe_allow_html=True)
 
-            with tab_geral:
-                df_mes = df_completo[df_completo['MES_ANO'] == mes_atual_str]
-                if not df_mes.empty:
-                    stats = df_mes['Atendente'].value_counts().reset_index()
-                    stats.columns = ['Atendente', 'Encerras']
-                    stats.index = stats.index + 1 
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric(f"Total em {mes_atual_str}", f"{len(df_mes)} un")
-                    c2.metric("Média/Técnico", f"{round(stats['Encerras'].mean(), 1)}")
-                    c3.metric("Líder", f"{stats.iloc[0]['Atendente'].split()[0]}", f"{stats.iloc[0]['Encerras']} un")
-                    st.dataframe(stats, use_container_width=True)
-                else: st.info(f"Sem dados para {mes_atual_str}.")
+def render():
+    apply_styles()
+    st_autorefresh(interval=10 * 60 * 1000, key="auto_refresh_perf_v2")
+    
+    fuso = pytz.timezone('America/Sao_Paulo')
+    agora = datetime.now(fuso)
+    m_atual, a_atual = agora.month, agora.year
+    
+    # Data Mês Anterior
+    dt_passado = agora.replace(day=1) - timedelta(days=1)
+    m_pass, a_pass = dt_passado.month, dt_passado.year
 
-            with tab_ranking:
-                if meses_disponiveis:
-                    abas_rank = st.tabs(meses_disponiveis[:3] + ["🏆 Ranking Geral"])
-                    for i, mes in enumerate(meses_disponiveis[:3]):
-                        with abas_rank[i]:
-                            df_r = df_completo[df_completo['MES_ANO'] == mes]['Atendente'].value_counts().reset_index()
-                            df_r.columns = ['Atendente', 'Total']; df_r.index = df_r.index + 1
-                            st.table(df_r)
-                    with abas_rank[-1]:
-                        df_geral = df_completo['Atendente'].value_counts().reset_index()
-                        df_geral.columns = ['Atendente', 'Total Acumulado']; df_geral.index = df_geral.index + 1
-                        st.table(df_geral)
+    # 1. Carrega Planilha (TME)
+    dados_planilha = load_technical_data()
+    if not dados_planilha: return
+    
+    tecnicos = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
+    selecionado = st.selectbox("Selecione o Técnico:", tecnicos)
+    
+    # 2. Abas
+    tab1, tab2 = st.tabs([f"📅 {m_atual:02d}/{a_atual}", f"⏪ {m_pass:02d}/{a_pass}"])
+    
+    with tab1:
+        df_atual = disparar_automacao_erp(m_atual, a_atual)
+        desenhar_conteudo(dados_planilha, df_atual, selecionado, m_atual, a_atual, agora.day - 1)
 
-            with tab_individual:
-                atendentes = sorted(df_completo['Atendente'].unique())
-                if atendentes:
-                    tecnico = st.selectbox("Selecione o Atendente:", atendentes, key="sb_individual_tecnico")
-                    df_tec = df_completo[df_completo['Atendente'] == tecnico].copy()
-                    df_tec['MES_INICIO'] = df_tec['DATA_REF'].dt.to_period('M').dt.to_timestamp()
-                    hist = df_tec.groupby('MES_INICIO').size().reset_index(name='Encerras')
-                    col1, col2 = st.columns([1, 2])
-                    with col1:
-                        st.metric("Total Acumulado", len(df_tec))
-                        hist_tabela = hist.copy()
-                        hist_tabela['Mês/Ano'] = hist_tabela['MES_INICIO'].dt.strftime('%m/%Y')
-                        st.dataframe(hist_tabela.sort_values('MES_INICIO', ascending=False)[['Mês/Ano', 'Encerras']], hide_index=True)
-                    with col2: st.line_chart(hist.set_index('MES_INICIO')['Encerras'])
-        else: st.warning("⚠️ Nenhum dado encontrado no CSV.")
-    else: st.info("⏳ Aguardando sincronização do ERP (isso pode levar 1 minuto)...")
+    with tab2:
+        df_passado = disparar_automacao_erp(m_pass, a_pass)
+        ultimo_dia = calendar.monthrange(a_pass, m_pass)[1]
+        desenhar_conteudo(dados_planilha, df_passado, selecionado, m_pass, a_pass, ultimo_dia)
