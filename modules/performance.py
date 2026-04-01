@@ -21,7 +21,7 @@ from streamlit_autorefresh import st_autorefresh
 from pathlib import Path
 from styles import apply_styles
 
-# --- 1. CONFIGURAÇÕES E MAPEAMENTO ---
+# --- 1. MAPEAMENTO DE NOMES ---
 MAPEAMENTO_TECNICOS = {
     "Alisson Do Couto Guerreiro": "ALISSON DO COUTO GUERREIRO",
     "Caio Alves dos Reis": "CAIO REIS",
@@ -38,7 +38,7 @@ MAPEAMENTO_TECNICOS = {
     "Vinicius Maciel Coppa": "VINICIUS COPPA"
 }
 
-# --- 2. FUNÇÕES DE APOIO ---
+# --- 2. FUNÇÕES DE SUPORTE ---
 def super_limpeza(texto):
     if not isinstance(texto, str): return ""
     texto = texto.upper()
@@ -81,13 +81,9 @@ def analisar_dados_csv(caminho_csv, mes, ano):
         df = pd.read_csv(caminho_csv, sep=None, engine='python', encoding='latin-1', on_bad_lines='skip')
         col_data = [c for c in df.columns if "Encerramento" in c][0]
         df['DATA_REF'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
-        
         possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável"]
         col_tec = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
-        
-        # Mapeamento reverso para bater com os nomes da planilha
         df['Atendente_Planilha'] = df[col_tec].apply(lambda x: next((k for k, v in MAPEAMENTO_TECNICOS.items() if super_limpeza(v) in super_limpeza(str(x))), None))
-        
         return df[(df['DATA_REF'].dt.month == mes) & (df['DATA_REF'].dt.year == ano)].dropna(subset=['Atendente_Planilha'])
     except: return None
 
@@ -100,35 +96,28 @@ def disparar_automacao_erp(mes, ano):
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    # Limpeza prévia para evitar pegar arquivo errado
     for f in glob.glob(str(DOWNLOAD_FOLDER / "*")):
         try: os.remove(f)
         except: pass
 
     chrome_options = Options()
-    chrome_options.add_argument("--headless=new") # Modo headless atualizado
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--window-size=1920,1080")
 
-    prefs = {
-        "download.default_directory": str(DOWNLOAD_FOLDER.absolute()),
-        "download.prompt_for_download": False,
-        "directory_upgrade": True
-    }
+    abs_path = str(DOWNLOAD_FOLDER.absolute())
+    prefs = {"download.default_directory": abs_path}
     chrome_options.add_experimental_option("prefs", prefs)
 
     driver = webdriver.Chrome(options=chrome_options)
-    driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": str(DOWNLOAD_FOLDER.absolute())})
+    driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_path})
     
     try:
-        wait = WebDriverWait(driver, 30)
+        wait = WebDriverWait(driver, 35)
+        driver.get(st.secrets["URL_ERP"])
         
-        # 1. ACESSO E LOGIN
-        driver.get("https://erp.osirnet.com.br/all_solicitations#/")
-        time.sleep(5)
-        
-        # Verifica se caiu na tela de login
+        # 1. Login (com verificação de campo)
         inputs_login = driver.find_elements(By.ID, ":r0:")
         if inputs_login:
             inputs_login[0].send_keys(st.secrets["ERP_USER"])
@@ -136,156 +125,128 @@ def disparar_automacao_erp(mes, ano):
             driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
             time.sleep(7)
 
-        # 2. SELEÇÃO DA TELA ANTIGA (Se necessário)
-        try:
-            btn_ant = driver.find_elements(By.XPATH, "//button[@aria-label='Tela antiga']")
-            if btn_ant:
-                driver.execute_script("arguments[0].click();", btn_ant[0])
-                time.sleep(5)
-        except: pass
-
-        # 3. FILTROS DIRETOS
-        # Forçamos a ida para a URL de solicitações para limpar estados anteriores
-        driver.get("https://erp.osirnet.com.br/all_solicitations#/")
+        # 2. Filtros
+        driver.get(st.secrets["URL_ERP"])
         time.sleep(5)
-        
-        filtro_avancado = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']")))
-        driver.execute_script("arguments[0].click();", filtro_avancado)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
         time.sleep(3)
 
-        # Seleção de Equipe (COP Encerramentos)
-        campo_equipe = wait.until(EC.element_to_be_clickable((By.ID, "teamId")))
-        campo_equipe.click()
-        time.sleep(2)
-        
-        filtro_txt = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
-        filtro_txt.send_keys("COP Encerramentos")
-        time.sleep(2)
-        filtro_txt.send_keys(Keys.ENTER)
-        time.sleep(3)
-        
-        item_equipe = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
-        driver.execute_script("arguments[0].click();", item_equipe)
+        # Seleção de Equipe
+        campo_eq = wait.until(EC.element_to_be_clickable((By.ID, "teamId")))
+        campo_eq.click()
         time.sleep(1)
-        driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
+        f_all = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
+        f_all.send_keys("COP Encerramentos")
+        time.sleep(1)
+        f_all.send_keys(Keys.ENTER)
         time.sleep(2)
+        item = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
+        driver.execute_script("arguments[0].click();", item)
+        driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
 
-        # DATAS
+        # 3. DATAS (Lógica Blindada contra Stacktrace)
         hj = datetime.now()
         data_ini = f"01/{mes:02d}/{ano}"
         data_fim = hj.strftime("%d/%m/%Y") if (mes == hj.month and ano == hj.year) else f"{calendar.monthrange(ano, mes)[1]:02d}/{mes:02d}/{ano}"
 
-        def set_react_val(field_id, value):
-            script = "var el = document.getElementById(arguments[0]); el.value = arguments[1]; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true}));"
+        def set_react_val_safe(field_id, value):
+            wait.until(EC.presence_of_element_located((By.ID, field_id)))
+            script = """
+            var el = document.getElementById(arguments[0]);
+            if (el) {
+                el.value = arguments[1];
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+            }
+            return false;
+            """
             driver.execute_script(script, field_id, value)
 
-        set_react_val("beginReportClosingDate", data_ini)
-        set_react_val("finalReportClosingDate", data_fim)
+        set_react_val_safe("beginReportClosingDate", data_ini)
+        set_react_val_safe("finalReportClosingDate", data_fim)
         time.sleep(2)
         
-        driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-        
-        # 4. EXPORTAÇÃO (O ponto onde mais ocorre erro)
-        status_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
-        time.sleep(10) # Aguarda o grid carregar os dados antes de exportar
-        driver.execute_script("arguments[0].click();", status_btn)
-        
-        btn_csv = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]")))
-        driver.execute_script("arguments[0].click();", btn_csv)
+        btn_aplicar = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'aplicar')]")))
+        driver.execute_script("arguments[0].click();", btn_aplicar)
+        time.sleep(10)
 
-        # 5. MONITORAMENTO DO DOWNLOAD
-        caminho_final = None
-        for _ in range(45): # Até 45 segundos de espera
-            arquivos = glob.glob(str(DOWNLOAD_FOLDER / "*.csv"))
-            if arquivos:
+        # 4. Exportação
+        btn_exp = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
+        driver.execute_script("arguments[0].click();", btn_exp)
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
+        
+        # Aguarda Download
+        for _ in range(40):
+            arquivos = glob.glob(os.path.join(abs_path, "*.csv"))
+            if arquivos and not any(f.endswith('.crdownload') for f in arquivos):
                 recente = max(arquivos, key=os.path.getmtime)
-                # Verifica se não é um arquivo temporário (.crdownload)
-                if not recente.endswith('.crdownload'):
-                    nome_arq = os.path.basename(recente)
-                    caminho_destino = DESTINO_FOLDER / nome_arq
-                    shutil.move(recente, str(caminho_destino))
-                    caminho_final = str(caminho_destino)
-                    break
+                dest = DESTINO_FOLDER / os.path.basename(recente)
+                shutil.move(recente, str(dest))
+                return analisar_dados_csv(str(dest), mes, ano)
             time.sleep(2)
-
-        if caminho_final:
-            return analisar_dados_csv(caminho_final, mes, ano)
-        return None
-
+            
     except Exception as e:
-        # Imprime o erro real no console para debug
-        print(f"DEBUG: Erro no Selenium: {str(e)}")
-        raise e # Repassa o erro para o Streamlit mostrar na tela
+        st.error(f"Erro Automação: {e}")
+        raise e
     finally:
         driver.quit()
+    return None
 
-# --- 4. RENDERIZAÇÃO DA INTERFACE ---
-def desenhar_conteudo(dados_tme, df_erp, tecnico, mes, ano, dia_limite):
+# --- 4. RENDERIZAÇÃO ---
+def desenhar_aba(dados_tme, df_erp, tecnico, mes, ano, dia_limite):
     df_tec = df_erp[df_erp['Atendente_Planilha'] == tecnico] if df_erp is not None else pd.DataFrame()
     total = len(df_tec)
     
-    # Métricas
     c1, c2, c3 = st.columns([2,1,1])
     with c1: st.markdown(f"#### {tecnico}")
-    with col2: st.metric("Total Encerramentos", f"{total} un")
+    with c2: st.metric("Total ENC", f"{total} un")
     
-    st.progress(min(total/550, 1.0), text=f"Meta Normal: {total}/550")
-    st.progress(min(total/681, 1.0), text=f"Super Meta: {total}/681")
+    st.progress(min(total/550, 1.0), text=f"Meta Normal (550): {total}")
+    st.progress(min(total/681, 1.0), text=f"Super Meta (681): {total}")
     
     st.divider()
-    
-    # Grid de Histórico
     grid = st.columns(7)
     counts = df_tec['DATA_REF'].dt.day.value_counts().to_dict() if not df_tec.empty else {}
     mapa_tme = {l[0]: l[3:] for l in dados_tme if len(l) > 0}
-    tempos_tecnico = mapa_tme.get(tecnico, [""] * 31)
+    tempos = mapa_tme.get(tecnico, [""] * 31)
 
     for i in range(dia_limite):
         dia = i + 1
         with grid[i % 7]:
             qtd = counts.get(dia, 0)
-            val_tme = str(tempos_tecnico[i]).strip() if i < len(tempos_tecnico) else ""
-            
-            # Cor do TME
-            cor = "#FFFFFF"
-            if val_tme in ["", "FORA"]: cor = "#FFD700"
-            elif converter_para_segundos(val_tme) and converter_para_segundos(val_tme) > 15: cor = "#FF4B4B"
+            tme = str(tempos[i]).strip() if i < len(tempos) else ""
+            cor = "#FF4B4B" if converter_para_segundos(tme) and converter_para_segundos(tme) > 15 else "#FFFFFF"
+            if tme in ["", "FORA"]: cor = "#FFD700"
 
             st.markdown(f"""
                 <div style="background:#1d2129; padding:8px; border-radius:8px; border:1px solid #30363d; margin-bottom:8px; text-align:center;">
                     <small>{dia:02d}/{mes:02d}</small><br>
                     <b style="color:#4da3ff;">E: {qtd}</b><br>
-                    <small style="color:{cor};">⏱️ {val_tme or '---'}</small>
+                    <small style="color:{cor};">⏱️ {tme or '---'}</small>
                 </div>
             """, unsafe_allow_html=True)
 
 def render():
     apply_styles()
-    st_autorefresh(interval=10 * 60 * 1000, key="auto_refresh_perf_v2")
-    
-    fuso = pytz.timezone('America/Sao_Paulo')
-    agora = datetime.now(fuso)
+    st_autorefresh(interval=10 * 60 * 1000, key="auto_perf")
+    agora = datetime.now(pytz.timezone('America/Sao_Paulo'))
     m_atual, a_atual = agora.month, agora.year
-    
-    # Data Mês Anterior
-    dt_passado = agora.replace(day=1) - timedelta(days=1)
-    m_pass, a_pass = dt_passado.month, dt_passado.year
+    dt_p = agora.replace(day=1) - timedelta(days=1)
+    m_pass, a_pass = dt_p.month, dt_p.year
 
-    # 1. Carrega Planilha (TME)
     dados_planilha = load_technical_data()
     if not dados_planilha: return
     
-    tecnicos = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
-    selecionado = st.selectbox("Selecione o Técnico:", tecnicos)
-    
-    # 2. Abas
-    tab1, tab2 = st.tabs([f"📅 {m_atual:02d}/{a_atual}", f"⏪ {m_pass:02d}/{a_pass}"])
-    
-    with tab1:
-        df_atual = disparar_automacao_erp(m_atual, a_atual)
-        desenhar_conteudo(dados_planilha, df_atual, selecionado, m_atual, a_atual, agora.day - 1)
+    nomes = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
+    selecionado = st.selectbox("Técnico:", nomes)
 
+    tab1, tab2 = st.tabs([f"📅 {m_atual:02d}/{a_atual}", f"⏪ {m_pass:02d}/{a_pass}"])
+
+    with tab1:
+        df_a = disparar_automacao_erp(m_atual, a_atual)
+        desenhar_aba(dados_planilha, df_a, selecionado, m_atual, a_atual, agora.day - 1)
+    
     with tab2:
-        df_passado = disparar_automacao_erp(m_pass, a_pass)
-        ultimo_dia = calendar.monthrange(a_pass, m_pass)[1]
-        desenhar_conteudo(dados_planilha, df_passado, selecionado, m_pass, a_pass, ultimo_dia)
+        df_p = disparar_automacao_erp(m_pass, a_pass)
+        desenhar_aba(dados_planilha, df_p, selecionado, m_pass, a_pass, calendar.monthrange(a_pass, m_pass)[1])
