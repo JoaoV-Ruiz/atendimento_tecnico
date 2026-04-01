@@ -133,8 +133,9 @@ def executar_robo_erp(mes, ano):
             time.sleep(6)
         except: 
             pass
-
-        # 3. Filtros
+        driver.get(st.secrets["URL_ERP"])
+        time.sleep(5)
+        # 3. Filtros    
         # Seleção da Equipe
         wait.until(EC.element_to_be_clickable((By.ID, "teamId"))).click()
         f_all = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
