@@ -137,7 +137,7 @@ def executar_robo_erp(mes, ano):
         except: pass
 
         # 3. Filtros e Datas
-        driver.get(f"{st.secrets['URL_ERP']}#/all_solicitations")
+        driver.get(st.secrets["URL_ERP"])
         time.sleep(5)
         
         # Abrir Filtro
