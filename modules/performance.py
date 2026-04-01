@@ -125,10 +125,43 @@ def disparar_automacao_erp(mes, ano):
             driver.find_element(By.XPATH, "//button[contains(., 'Entrar')]").click()
             time.sleep(7)
 
-        # 2. Filtros
-        driver.get(st.secrets["URL_ERP"])
-        time.sleep(5)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
+        # 2. REDIRECIONAMENTO DIRETO E FILTROS
+        # Em vez de esperar carregar a home, vamos direto para a URL de filtragem
+        driver.get(st.secrets['URL_ERP'])
+        time.sleep(7) # Espera o React carregar os componentes base
+
+        # Tenta clicar no filtro avançado usando múltiplos seletores possíveis
+        try:
+            status_text.text("🔍 Abrindo Filtro Avançado...")
+            
+            # Seletor por classe/ícone caso o tooltip falhe
+            seletores_filtro = [
+                "//button[@tooltip='Filtro avançado']",
+                "//button[.//i[contains(@class, 'fa-filter')]]",
+                "//button[contains(@class, 'filter')]"
+            ]
+            
+            sucesso_filtro = False
+            for seletor in seletores_filtro:
+                try:
+                    btn = wait.until(EC.element_to_be_clickable((By.XPATH, seletor)))
+                    driver.execute_script("arguments[0].scrollIntoView(true);", btn)
+                    driver.execute_script("arguments[0].click();", btn)
+                    sucesso_filtro = True
+                    break
+                except: continue
+            
+            if not sucesso_filtro:
+                raise Exception("Não foi possível encontrar o botão de Filtro Avançado.")
+                
+        except Exception as e:
+            print(f"Erro ao abrir filtro: {e}")
+            # Se falhar, tenta um refresh e tenta mais uma vez
+            driver.refresh()
+            time.sleep(5)
+            btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'button')]//i[contains(@class, 'filter')]/..")))
+            driver.execute_script("arguments[0].click();", btn)
+
         time.sleep(3)
 
         # Seleção de Equipe
