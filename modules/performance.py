@@ -195,19 +195,29 @@ def sincronizar_periodo_completo():
     return {'atual': df_atual, 'passado': df_passado}
 
 def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
-    # 1. TRATAMENTO DOS DADOS DO ERP
-    df_tec = pd.DataFrame()
+    # 1. TRATAMENTO DOS DADOS DO ERP (BLINDAGEM CONTRA KEYERROR)
+    df_tec = pd.DataFrame(columns=['DATA_REF', 'Tec_Formatado']) # Garante colunas mínimas
+    
     if df_bruto is not None and not df_bruto.empty:
         df = df_bruto.copy()
-        # Identifica coluna de data
-        col_data = [c for c in df.columns if "Encerramento" in c][0]
-        df['DATA_REF'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
-        # Identifica coluna de atendente
-        possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável", "Nome"]
-        col_atendente = next((c for c in possiveis_cols if c in df.columns), df.columns[3])
-        # Mapeia
-        df['Tec_Formatado'] = df[col_atendente].apply(lambda x: next((k for k, v in MAPEAMENTO_TECNICOS.items() if super_limpeza(v) in super_limpeza(str(x))), None))
-        df_tec = df[df['Tec_Formatado'] == tecnico].dropna(subset=['DATA_REF'])
+        
+        # Localiza a coluna de data de forma dinâmica
+        cols_data = [c for c in df.columns if "Encerramento" in c]
+        
+        if cols_data:
+            df['DATA_REF'] = pd.to_datetime(df[cols_data[0]], dayfirst=True, errors='coerce')
+            
+            # Localiza a coluna de atendente
+            possiveis_cols = ["Atendente", "Usuário Encerramento", "Responsável", "Nome"]
+            col_atendente = next((c for c in possiveis_cols if c in df.columns), None)
+            
+            if col_atendente:
+                df['Tec_Formatado'] = df[col_atendente].apply(
+                    lambda x: next((k for k, v in MAPEAMENTO_TECNICOS.items() 
+                                  if super_limpeza(v) in super_limpeza(str(x))), None)
+                )
+                # Filtra pelo técnico selecionado e remove datas inválidas
+                df_tec = df[(df['Tec_Formatado'] == tecnico)].dropna(subset=['DATA_REF'])
 
     # 2. TRATAMENTO TME (PLANILHA)
     mapa_tme = {l[0]: l[3:] for l in dados_tme_raw if len(l) > 0}
@@ -216,7 +226,7 @@ def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
     # Cálculos de Métricas
     total_enc = len(df_tec)
     
-    # Cálculo da Média de TME
+    # Cálculo da Média de TME (Evita divisão por zero)
     tempos_segundos = [converter_para_segundos(t) for t in tempos_raw[:dia_limite]]
     tempos_validos = [t for t in tempos_segundos if t is not None]
     media_tme_seg = sum(tempos_validos) / len(tempos_validos) if tempos_validos else 0
@@ -235,7 +245,11 @@ def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
     
     # 4. GRID DIÁRIO
     grid = st.columns(7)
-    counts_diario = df_tec['DATA_REF'].dt.day.value_counts().to_dict()
+    
+    # Se df_tec estiver vazio, counts_diario será um dict vazio, o que não quebra o loop
+    counts_diario = {}
+    if not df_tec.empty:
+        counts_diario = df_tec['DATA_REF'].dt.day.value_counts().to_dict()
 
     for i in range(dia_limite):
         dia = i + 1
@@ -243,11 +257,12 @@ def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
             qtd = counts_diario.get(dia, 0)
             tme_dia = str(tempos_raw[i]).strip() if i < len(tempos_raw) else ""
             
-            # Lógica de cor do TME diário
             seg_dia = converter_para_segundos(tme_dia)
             cor_tme = "#FFFFFF"
-            if tme_dia in ["", "FORA"]: cor_tme = "#FFD700"
-            elif seg_dia and seg_dia > 900: # Exemplo: Alerta se maior que 15 min
+            if tme_dia in ["", "FORA"]: 
+                cor_tme = "#FFD700"
+                tme_dia = "FORA"
+            elif seg_dia and seg_dia > 900: # Alerta vermelho se > 15 min
                 cor_tme = "#FF4B4B"
 
             st.markdown(f"""
@@ -257,7 +272,6 @@ def desenhar_aba(dados_tme_raw, df_bruto, tecnico, mes, ano, dia_limite):
                     <small style="color:{cor_tme};">⏱️ {tme_dia or '---'}</small>
                 </div>
             """, unsafe_allow_html=True)
-
 def render():
     apply_styles()
     st_autorefresh(interval=15 * 60 * 1000, key="refresh_perf")
