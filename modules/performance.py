@@ -74,24 +74,28 @@ def load_technical_data():
         return gspread.authorize(creds).open_by_url(url).worksheet("AtendimentoTécnico").get("A8:AJ20")
     except: return None
 
-# --- 3. EXPORTAÇÃO CSV ---
-def preparar_csv_tme(dados_planilha):
-    """Transforma os dados da planilha em um CSV baixável"""
+# --- 3. EXPORTAÇÃO APENAS MÉDIAS ---
+def preparar_csv_medias(dados_planilha):
+    """Gera um CSV com Colaborador e sua Média de TME do mês"""
     try:
-        # Criar cabeçalho: Nome + Dias 1 a 31
-        colunas = ["Colaborador"] + [f"Dia {i}" for i in range(1, 32)]
-        lista_final = []
-        
+        lista_medias = []
         for linha in dados_planilha:
             if len(linha) > 0 and linha[0] in MAPEAMENTO_TECNICOS:
                 nome = linha[0]
-                tempos = linha[3:]
-                # Ajusta para ter sempre 31 dias
-                while len(tempos) < 31: tempos.append("")
-                lista_final.append([nome] + tempos[:31])
+                tempos_raw = linha[3:]
+                
+                # Converte tempos válidos para segundos para calcular média
+                segundos_validos = [converter_para_segundos(t) for t in tempos_raw]
+                segundos_validos = [s for s in segundos_validos if s is not None]
+                
+                media_seg = sum(segundos_validos) / len(segundos_validos) if segundos_validos else 0
+                lista_medias.append({
+                    "Colaborador": nome,
+                    "Média TME (Mensal)": formatar_segundos(media_seg)
+                })
         
-        df_export = pd.DataFrame(lista_final, columns=colunas)
-        return df_export.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
+        df_medias = pd.DataFrame(lista_medias)
+        return df_medias.to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
     except:
         return None
 
@@ -243,7 +247,7 @@ def render():
     
     nomes = sorted([l[0] for l in dados_planilha if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
     
-    # --- CABEÇALHO COM BOTÃO DE EXPORTAR ---
+    # --- CABEÇALHO COM BOTÃO DE MÉDIAS ---
     st.markdown("### 📈 Painel de Performance")
     
     col_sel, col_exp = st.columns([3, 1])
@@ -252,12 +256,12 @@ def render():
         selecionado = st.selectbox("Selecione o Técnico:", nomes, label_visibility="collapsed")
     
     with col_exp:
-        csv_data = preparar_csv_tme(dados_planilha)
+        csv_data = preparar_csv_medias(dados_planilha)
         if csv_data:
             st.download_button(
-                label="📥 Exportar TMEs (.csv)",
+                label="📥 Baixar Médias TME (.csv)",
                 data=csv_data,
-                file_name=f"tme_colaboradores_{agora.strftime('%m_%Y')}.csv",
+                file_name=f"medias_tme_equipe_{agora.strftime('%m_%Y')}.csv",
                 mime="text/csv",
                 use_container_width=True
             )
