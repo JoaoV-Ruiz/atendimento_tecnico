@@ -211,10 +211,6 @@ def render():
     # --- LÓGICA DE EXIBIÇÃO (REVISADA) ---
     st.title("🚀 É A EQUIPE DO ENCERRAS!!!")
     
-    # Botão manual para forçar atualização se necessário
-    if st.button("🔄 Atualizar Agora"):
-        st.cache_data.clear()
-        st.rerun()
     
     resultado = disparar_automacao_cached()
     
