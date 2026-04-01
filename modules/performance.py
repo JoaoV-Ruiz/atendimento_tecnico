@@ -82,7 +82,7 @@ def executar_robo_erp(mes, ano):
     DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
     DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
 
-    # Limpeza de arquivos antigos para evitar pegar o CSV errado
+    # Limpeza de arquivos antigos
     for f in glob.glob(str(DOWNLOAD_FOLDER / "*.csv")):
         try: os.remove(f)
         except: pass
@@ -99,7 +99,10 @@ def executar_robo_erp(mes, ano):
     driver = webdriver.Chrome(options=chrome_options)
     driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_path})
     
-   try: 
+    # Criamos o wait aqui para ser usado no try
+    wait = WebDriverWait(driver, 45)
+    
+    try: # Linha 102 corrigida (ajuste de indentação)
         def forcar_input_react(elemento, valor):
             script = """
             var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
@@ -110,48 +113,50 @@ def executar_robo_erp(mes, ano):
             driver.execute_script(script, elemento, valor)
 
         # 1. Login
-        p_bar.progress(10, text="Login...")
-        driver.get(URL_ERP)
+        # Nota: Se não estiver usando st.progress aqui, remova a linha da p_bar
+        driver.get(st.secrets["URL_ERP"])
         time.sleep(5)
         try:
             c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
             c_pass = driver.find_element(By.ID, ":r1:")
-            forcar_input_react(c_user, ERP_USER)
-            forcar_input_react(c_pass, ERP_PASS) 
+            forcar_input_react(c_user, st.secrets["ERP_USER"])
+            forcar_input_react(c_pass, st.secrets["ERP_PASS"]) 
             driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
             time.sleep(10)
-        except: pass
+        except: 
+            pass
 
         # 2. Tela Antiga
-        p_bar.progress(30, text="Acessando a Tela Antiga...")
         try:
             btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
             driver.execute_script("arguments[0].click();", btn_ant)
             time.sleep(6)
-        except: pass
+        except: 
+            pass
+
+        # 3. Filtros
         # Seleção da Equipe
-        driver.find_element(By.ID, "teamId").click()
+        wait.until(EC.element_to_be_clickable((By.ID, "teamId"))).click()
         f_all = wait.until(EC.visibility_of_element_located((By.ID, "filterAll")))
         f_all.send_keys("COP Encerramentos")
         f_all.send_keys(Keys.ENTER)
         time.sleep(2)
+        
         item = wait.until(EC.presence_of_element_located((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]")))
         driver.execute_script("arguments[0].click();", item)
         driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
 
-        # --- LÓGICA DE DATAS (Mês Atual vs Anterior) ---
+        # --- LÓGICA DE DATAS ---
         hj = datetime.now()
         data_ini = f"01/{mes:02d}/{ano}"
         
-        # Se for o mês atual, vai até hoje. Se for mês passado, vai até o último dia daquele mês.
         if mes == hj.month and ano == hj.year:
             data_fim = hj.strftime("%d/%m/%Y")
         else:
             ultimo_dia = calendar.monthrange(ano, mes)[1]
             data_fim = f"{ultimo_dia:02d}/{mes:02d}/{ano}"
 
-        # Inserção das datas via Script (mais seguro para campos React)
-        script_react = "var el = document.getElementById(arguments[0]); el.value = arguments[1]; el.dispatchEvent(new Event('input', {bubbles:true}));"
+        script_react = "var el = document.getElementById(arguments[0]); if(el){ el.value = arguments[1]; el.dispatchEvent(new Event('input', {bubbles:true})); }"
         driver.execute_script(script_react, "beginReportClosingDate", data_ini)
         driver.execute_script(script_react, "finalReportClosingDate", data_fim)
         
@@ -164,7 +169,7 @@ def executar_robo_erp(mes, ano):
         driver.execute_script("arguments[0].click();", btn_exp)
         wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
         
-        # Aguarda o download e move o arquivo
+        # Aguarda o download
         for _ in range(40):
             arquivos = glob.glob(os.path.join(abs_path, "*.csv"))
             if arquivos and not any(f.endswith('.crdownload') for f in arquivos):
@@ -175,6 +180,7 @@ def executar_robo_erp(mes, ano):
             time.sleep(2)
             
         return None
+
     except Exception as e:
         st.error(f"Erro ao coletar dados de {mes}/{ano}: {e}")
         return None
