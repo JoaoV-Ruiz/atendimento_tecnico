@@ -105,7 +105,7 @@ def executar_robo_erp(mes, ano):
             time.sleep(7)
 
         # Filtros
-        driver.get(f"{st.secrets['URL_ERP']}#/all_solicitations")
+        driver.get(st.secrets['URL_ERP'])
         time.sleep(6)
         
         btn_filtro = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']")))
