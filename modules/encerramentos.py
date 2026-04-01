@@ -107,6 +107,7 @@ def render():
         return str(caminho_final.absolute())
 
     # --- 3. AUTOMAÇÃO SELENIUM ---
+    # --- 3. AUTOMAÇÃO SELENIUM ---
     @st.cache_data(ttl=300, show_spinner=False)
     def disparar_automacao_cached():
         prog_container = st.empty()
@@ -120,7 +121,7 @@ def render():
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--window-size=1920,1080")
-
+    
         abs_download_path = str(DOWNLOAD_FOLDER.absolute())
         prefs = {
             "download.default_directory": abs_download_path,
@@ -129,7 +130,7 @@ def render():
             "safebrowsing.enabled": True
         }
         chrome_options.add_experimental_option("prefs", prefs)
-
+    
         driver = None
         try:
             driver = webdriver.Chrome(options=chrome_options)
@@ -139,7 +140,7 @@ def render():
                 "behavior": "allow",
                 "downloadPath": abs_download_path
             })
-
+    
             wait = WebDriverWait(driver, 35)
             
             def forcar_input_react(elemento, valor):
@@ -150,7 +151,7 @@ def render():
                 element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
                 """
                 driver.execute_script(script, elemento, valor)
-
+    
             # 1. Login
             status_text.text("🔐 Efetuando Login...")
             p_bar.progress(20)
@@ -164,7 +165,7 @@ def render():
                 driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
                 time.sleep(10)
             except: pass
-
+    
             # 2. Tela Antiga
             status_text.text("⚙️ Acessando interface...")
             p_bar.progress(40)
@@ -173,7 +174,7 @@ def render():
                 driver.execute_script("arguments[0].click();", btn_ant)
                 time.sleep(6)
             except: pass
-
+    
             # 3. Filtros
             status_text.text("🔍 Aplicando filtros...")
             p_bar.progress(60)
@@ -182,7 +183,7 @@ def render():
                 time.sleep(5)
                 wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
                 time.sleep(3)
-
+    
                 driver.find_element(By.ID, "teamId").click()
                 time.sleep(1)
                 f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
@@ -192,7 +193,7 @@ def render():
                 wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
                 time.sleep(1)
                 driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
-
+    
                 # Limpeza datas
                 driver.execute_script("""
                     ['beginInitialDate', 'endInitialDate'].forEach(id => {
@@ -200,7 +201,7 @@ def render():
                         if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
                     });
                 """)
-
+    
                 hj = datetime.now()
                 fim = hj.replace(day=calendar.monthrange(hj.year, hj.month)[1]).strftime("%d/%m/%Y")
                 forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), fim)
@@ -208,7 +209,7 @@ def render():
                 driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
                 time.sleep(12)
             except: pass
-
+    
             # 4. Exportação
             status_text.text("📥 Baixando CSV...")
             p_bar.progress(85)
@@ -223,7 +224,7 @@ def render():
                 
                 if caminho is None:
                     return None
-
+    
                 status_text.text("✅ Sincronizado!")
                 p_bar.progress(100)
                 time.sleep(1)
@@ -236,7 +237,7 @@ def render():
                 
         finally:
             if driver: driver.quit()
-
+            
     # --- 4. INTERFACE STREAMLIT ---
     st.title("🚀 É A EQUIPE DO ENCERRAS!!!")
     resultado = disparar_automacao_cached()
