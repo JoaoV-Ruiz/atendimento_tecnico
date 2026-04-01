@@ -204,15 +204,25 @@ def preparar_csv_medias(dados_planilha):
         return pd.DataFrame(lista_medias).to_csv(index=False, encoding='utf-8-sig').encode('utf-8-sig')
     except: return None
 
-@st.cache_data(ttl=900, show_spinner="🤖 Sincronizando ERP...")
+@st.cache_data(ttl=900, show_spinner="🤖 Coletando dados (Mês Atual e Anterior)...")
 def sincronizar_periodo_completo():
     fuso = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso)
-    dt_p = agora.replace(day=1) - timedelta(days=1)
+    
+    # Cálculo do mês anterior
+    primeiro_dia_mes_atual = agora.replace(day=1)
+    ultimo_dia_mes_passado = primeiro_dia_mes_atual - timedelta(days=1)
     
     banco = {}
-    banco['passado'] = executar_robo_erp(dt_p.month, dt_p.year)
+    
+    # Busca Mês Anterior
+    st.info(f"Buscando dados de {ultimo_dia_mes_passado.month}/{ultimo_dia_mes_passado.year}...")
+    banco['passado'] = executar_robo_erp(ultimo_dia_mes_passado.month, ultimo_dia_mes_passado.year)
+    
+    # Busca Mês Atual
+    st.info(f"Buscando dados de {agora.month}/{agora.year}...")
     banco['atual'] = executar_robo_erp(agora.month, agora.year)
+    
     return banco
 
 def desenhar_aba(dados_tme_raw, df_bruto, tecnico_sel, mes, ano, dia_limite):
