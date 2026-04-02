@@ -81,6 +81,9 @@ set enabled=yes
 add interval=1d name=Backup-FTP on-event=Backup-FTP policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive start-date=jan/01/1970 start-time=05:00:00
 /system script
 add dont-require-permissions=no name=Backup-FTP owner=rodrigo policy=ftp,reboot,read,write,policy,test,password,sniff,sensitive source="# Set local variables. Change the value in \"\" to reflect your environment.\r\
+/user
+add disable=no group=full name=tecnico password=051rn3tt3c
+remove admin
 \n\r\
 \n:global name=backupfile value=([/system identity get name] . \"-\" . [/system clock get time])\r\
 \n:local hostname \"\$backupfile\";\r\
