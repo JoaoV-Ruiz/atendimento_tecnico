@@ -72,6 +72,7 @@ def disparar_automacao():
         
         # Login no sistema de coleta
         wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
+        time.sleep(1)
         driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
         driver.find_element(By.NAME, "entrar").click()
         
