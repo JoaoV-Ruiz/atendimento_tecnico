@@ -77,7 +77,7 @@ def disparar_automacao():
         driver.find_element(By.NAME, "entrar").click()
         
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
-        time.sleep(5) # Espera o carregamento total das linhas
+        time.sleep(10) # Espera o carregamento total das linhas
         
         links_sucesso = driver.find_elements(By.XPATH, "//a[@data-checado]")
         total_sucesso = len(links_sucesso)
