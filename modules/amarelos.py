@@ -219,20 +219,6 @@ def render():
         m1.metric("Total Sucesso", t_s)
         m2.metric("Total Checado", t_c)
         m3.metric("Faltam Checar", t_s - t_c)
-        
-        st.divider()
-
-        # --- BOTÃO DE DISPARO MANUAL ---
-        if st.button("🚀 Enviar Relatório para o Chat", use_container_width=True):
-            with st.spinner("Abrindo o navegador e enviando mensagem para o Zulip..."):
-                if st.session_state.dados_cache:
-                    sucesso_envio = enviar_relatorio_chat(t_s, t_f)
-                    if sucesso_envio:
-                        st.success("✅ Relatório enviado com sucesso para o Cauê!")
-                    else:
-                        st.error("❌ Ocorreu um erro ao enviar o relatório. Verifique o terminal para detalhes.")
-                else:
-                    st.warning("⚠️ Não há dados carregados para enviar.")
                     
         st.divider()
         
