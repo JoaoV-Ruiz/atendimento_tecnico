@@ -108,10 +108,15 @@ def disparar_automacao():
         
         return df_final, total_checados, total_sucesso, total_falha
     except Exception as e:
-        st.error(f"Erro na coleta Selenium: {e}")
+        # Tira uma foto da tela e salva no servidor
+        driver.save_screenshot("erro_nuvem.png")
+        
+        st.error(f"Erro na coleta Selenium. Veja o print abaixo:")
+        # Exibe a foto no seu aplicativo
+        st.image("erro_nuvem.png", caption="Visão do Robô no momento do erro")
+        st.code(str(e))
+        
         return None, 0, 0, 0
-    finally:
-        driver.quit()
 
 def enviar_relatorio_chat(total_sucesso, total_falha):
     """ Envia o relatório para o Cauê via Zulip/Chat """
