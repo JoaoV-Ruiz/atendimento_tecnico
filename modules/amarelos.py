@@ -84,7 +84,6 @@ def disparar_automacao():
         time.sleep(0.5) 
         driver.find_element(By.ID, "password").send_keys(SENHA_SISTEMA)
         driver.find_element(By.NAME, "entrar").click()
-        time.sleep(2) 
         
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
         time.sleep(5) # Espera o carregamento total das linhas
