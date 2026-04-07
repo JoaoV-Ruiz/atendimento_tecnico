@@ -42,8 +42,8 @@ fuso_br = pytz.timezone('America/Sao_Paulo')
 agora = datetime.now(fuso_br)
 
 # --- 5. GATILHO AUTOMÁTICO ---
-HORA_ALVO = 21
-MIN_ALVO = 15
+HORA_ALVO = 13
+MIN_ALVO = 0
 
 if agora.hour == HORA_ALVO and agora.minute == MIN_ALVO:
     if st.session_state.dia_disparo != agora.day:
