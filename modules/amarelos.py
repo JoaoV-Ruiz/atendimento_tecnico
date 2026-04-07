@@ -13,9 +13,13 @@ import time
 import json
 import pytz
 
-# --- CONFIGURAÇÕES ---
+# --- CONFIGURAÇÕES LENDO DO CLOUD SECRETS ---
 URL_COLETA = st.secrets["URL_COLETA"]
 URL_CHAT = st.secrets["URL_CHAT"]
+EMAIL_CORP = st.secrets["EMAIL_CORP"]
+SENHA_SISTEMA = st.secrets["SENHA_SISTEMA"]
+SENHA_ZULIP = st.secrets["SENHA_ZULIP"]
+SPREADSHEET_URL = st.secrets["SPREADSHEET_URL"]
 
 TABELA_NOMES = {
     "396": "DIOGO TABORDA", "728": "VINICIUS COPPA", "734": "NATHALI VALLIER",
@@ -28,11 +32,12 @@ TABELA_NOMES = {
 # --- FUNÇÕES DE APOIO ---
 def conectar_google_sheets():
     try:
+        # Lê o JSON do st.secrets
         creds_json = json.loads(st.secrets["GOOGLE_JSON_CREDENTIALS"])
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
         client = gspread.authorize(creds)
-        return client.open_by_url(st.secrets["SPREADSHEET_URL"])
+        return client.open_by_url(SPREADSHEET_URL)
     except Exception as e:
         st.error(f"Erro na conexão com Google Sheets: {e}")
         return None
@@ -65,19 +70,23 @@ def disparar_automacao():
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    # Forçar resolução e disfarçar o robô (Vital para rodar em nuvem)
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    
     driver = webdriver.Chrome(options=options)
     try:
         driver.get(URL_COLETA)
         wait = WebDriverWait(driver, 30)
         
         # Login no sistema de coleta
-        wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(st.secrets["EMAIL_CORP"])
-        time.sleep(1)
-        driver.find_element(By.ID, "password").send_keys(st.secrets["SENHA_SISTEMA"])
+        wait.until(EC.presence_of_element_located((By.ID, "login"))).send_keys(EMAIL_CORP)
+        time.sleep(0.5) 
+        driver.find_element(By.ID, "password").send_keys(SENHA_SISTEMA)
         driver.find_element(By.NAME, "entrar").click()
         
         wait.until(EC.presence_of_element_located((By.XPATH, "//a[@data-checado]")))
-        time.sleep(10) # Espera o carregamento total das linhas
+        time.sleep(5) # Espera o carregamento total das linhas
         
         links_sucesso = driver.find_elements(By.XPATH, "//a[@data-checado]")
         total_sucesso = len(links_sucesso)
@@ -111,6 +120,7 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--window-size=1920,1080")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     driver = webdriver.Chrome(options=options)
     
     try:
@@ -118,8 +128,8 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
         wait = WebDriverWait(driver, 50)
         
         # 1. Login no Chat
-        wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(st.secrets["EMAIL_CORP"])
-        driver.find_element(By.NAME, "password").send_keys(st.secrets["SENHA_ZULIP"])
+        wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(EMAIL_CORP)
+        driver.find_element(By.NAME, "password").send_keys(SENHA_ZULIP)
         driver.find_element(By.NAME, "button").click()
         
         # 2. Aguarda o carregamento inicial do sistema
@@ -168,23 +178,26 @@ def enviar_relatorio_chat(total_sucesso, total_falha):
         driver.quit()
 
 def realizar_coleta_e_envio_automatizado():
-    """ Função central chamada pela main.py """
+    """ Função central """
     df, checados, sucesso, falha = disparar_automacao()
     if df is not None:
-        # Salva primeiro no Sheets por segurança
         salvar_fechamento_google_sheets(df, sucesso, falha)
-        # Tenta enviar para o Cauê
         return enviar_relatorio_chat(sucesso, falha)
     return False
 
 def render():
-    # Mantém a página atualizando sozinha a cada 30 segundos
     st_autorefresh(interval=30000, key="refresh_amarelos")
     
     fuso_br = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso_br)
     
     st.title("📊 Monitor de Provisionamento")
+    
+    # --- INICIALIZAÇÃO DE VARIÁVEIS DE SESSÃO ---
+    if "dados_cache" not in st.session_state:
+        st.session_state.dados_cache = None
+    if "ultima_coleta" not in st.session_state:
+        st.session_state.ultima_coleta = agora - timedelta(minutes=10)
     
     # Gerenciamento de Cache
     if st.session_state.dados_cache is None or (agora - st.session_state.ultima_coleta >= timedelta(minutes=5)):
@@ -203,6 +216,20 @@ def render():
         m3.metric("Faltam Checar", t_s - t_c)
         
         st.divider()
+
+        # --- BOTÃO DE DISPARO MANUAL ---
+        if st.button("🚀 Enviar Relatório para o Chat", use_container_width=True):
+            with st.spinner("Abrindo o navegador e enviando mensagem para o Zulip..."):
+                if st.session_state.dados_cache:
+                    sucesso_envio = enviar_relatorio_chat(t_s, t_f)
+                    if sucesso_envio:
+                        st.success("✅ Relatório enviado com sucesso para o Cauê!")
+                    else:
+                        st.error("❌ Ocorreu um erro ao enviar o relatório. Verifique o terminal para detalhes.")
+                else:
+                    st.warning("⚠️ Não há dados carregados para enviar.")
+                    
+        st.divider()
         
         if df_d is not None and not df_d.empty:
             c1, c2 = st.columns([1, 1.5])
@@ -212,3 +239,6 @@ def render():
                 st.bar_chart(df_d.set_index("Colaborador"))
         else:
             st.info("Nenhum dado de produtividade detectado na fila no momento.")
+
+if __name__ == "__main__":
+    render()
