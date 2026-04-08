@@ -86,7 +86,7 @@ def disparar_automacao():
         driver.find_element(By.NAME, "entrar").click()
         
         time.sleep(5)
-        WebDriverWait(driver, 10).until(lambda d: d.find_element(By.CLASS_NAME, "lista-sucesso"))
+        WebDriverWait(driver, 30).until(lambda d: d.find_element(By.CLASS_NAME, "lista-sucesso"))
         
         links_sucesso = driver.find_elements(By.XPATH, "//a[@data-checado]")
         total_sucesso = len(links_sucesso)
