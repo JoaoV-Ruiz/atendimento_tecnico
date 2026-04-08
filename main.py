@@ -9,6 +9,26 @@ st.set_page_config(page_title="Sistema Atendimento Técnico", layout="wide", pag
 from styles import apply_styles
 
 # --- 3. INICIALIZAÇÃO DE SEGURANÇA (BOOT) ---
+def formatador_codigo_rapido():
+    """Gera o código especial pegando os últimos 8 dígitos e inserindo o prefixo."""
+    with st.popover("🔑 Gerador de ZTE"):
+        st.markdown("**Transformador de Serial**")
+        texto_input = st.text_input("Insira o Serial original:", placeholder="ex: ZTE3B8TR8J17025", key="in_codigo")
+        
+        if texto_input:
+            # Remove espaços em branco acidentais do início/fim
+            texto_limpo = texto_input.strip()
+            
+            if len(texto_limpo) >= 8:
+                ultimos_oito = texto_limpo[-8:].lower()
+                resultado = f"051R@{ultimos_oito}"
+                
+                st.caption("Resultado (clique no ícone para copiar):")
+                # O st.code já cria uma caixinha com botão de cópia nativo!
+                st.code(resultado, language="text")
+            else:
+                st.warning("⚠️ O texto inserido tem menos de 8 caracteres.")
+                
 def boot_session_state():
     if 'batida_version' not in st.session_state: st.session_state.batida_version = 0
     if 'batida_proto' not in st.session_state: st.session_state.batida_proto = ""
@@ -67,7 +87,7 @@ escolha = st.sidebar.radio(
 )
 
 st.sidebar.divider()
-st.sidebar.info(f"📅 **Hoje:** {agora.strftime('%d/%m/%Y')}\n\n🕒 **Hora:** {agora.strftime('%H:%M:%S')}")
+    formatador_codigo_rapido()
 
 # Renderização segura
 try:
