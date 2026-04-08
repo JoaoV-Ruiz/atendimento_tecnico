@@ -86,8 +86,13 @@ escolha = st.sidebar.radio(
     ["📑 Resumo Encerramento", "🟡 Resumo Amarelos", "📲 Portabilidade", "💰 Batida de Caixa", "📈 Performance TME", "💻Scripts Para RB's"]
 )
 
-st.sidebar.divider()
-formatador_codigo_rapido()
+with st.sidebar:
+        st.markdown("### Ferramentas")
+        st.divider()
+        conversor_rapido()
+        st.write("") # Um espacinho em branco para não ficar colado
+        formatador_codigo_rapido() 
+        st.divider()
 
 # Renderização segura
 try:
