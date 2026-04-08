@@ -87,7 +87,7 @@ escolha = st.sidebar.radio(
 )
 
 st.sidebar.divider()
-    formatador_codigo_rapido()
+formatador_codigo_rapido()
 
 # Renderização segura
 try:
