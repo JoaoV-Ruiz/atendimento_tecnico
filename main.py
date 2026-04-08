@@ -87,9 +87,7 @@ escolha = st.sidebar.radio(
 )
 
 with st.sidebar:
-        st.markdown("### Ferramentas")
         st.divider()
-        st.write("") # Um espacinho em branco para não ficar colado
         formatador_codigo_rapido() 
         st.divider()
 
