@@ -100,7 +100,7 @@ def coletar_dados_aba(client, nome_aba):
 def exibir_metricas_cards(t_s, t_c, t_nc):
     m1, m2, m3 = st.columns(3)
     m1.metric("✅ Total Sucesso", t_s)
-    m2.metric("🔍 Total Checados (Soma)", t_c)
+    m2.metric("🔍 Total Checados", t_c)
     m3.metric("⏳ Não Checados", t_nc)
     st.divider()
 
