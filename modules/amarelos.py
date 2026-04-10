@@ -16,7 +16,7 @@ st.set_page_config(page_title="Monitor de Produtividade", layout="wide")
 # SPREADSHEET_URL = "..."
 try:
     GOOGLE_JSON_CREDENTIALS_2 = st.secrets["GOOGLE_JSON_CREDENTIALS_2"]
-    SPREADSHEET_URL = st.secrets["SPREADSHEET_URL"]
+    SPREADSHEET_URL = st.secrets["URL_AMARELOS"]
 except Exception as e:
     st.error("Erro: Variáveis de configuração não encontradas no st.secrets.")
     st.stop()
