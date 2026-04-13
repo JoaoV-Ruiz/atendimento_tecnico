@@ -27,7 +27,7 @@ MAPEAMENTO_TECNICOS = {
     "Alisson Do Couto Guerreiro": "ALISSON DO COUTO GUERREIRO",
     "Caio Alves dos Reis": "CAIO REIS",
     "Cristiano Weber Marques": "CRISTIANO MARQUES",
-    "Diogo Taborda de Bitencourt": "DIOGO BITENCOURT",
+    "Diogo Taborda de Bitencourt": "DIOGO TABORDA DE BITENCOURT",
     "Filipe Vieira Vaz": "FILIPE VIEIRA VAZ",
     "Igor Saldanha Noguez": "IGOR SALDANHA",
     "João Vitor Ruiz Barboza": "JOÃO VITOR RUIZ BARBOZA",
