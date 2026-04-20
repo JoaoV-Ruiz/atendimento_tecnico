@@ -343,8 +343,8 @@ def desenhar_aba(dados_tme_raw, df_bruto, tecnico_sel, mes, ano, dia_limite):
     with c2: st.metric("Total Encerramentos", f"{total_enc} un")
     with c3: st.metric("TME Médio", formatar_segundos(media_seg))
     
-    st.progress(min(total_enc/681, 1.0), text=f"Meta Normal (550): {total_enc}")
-    st.progress(min(total_enc/800, 1.0), text=f"Super Meta (681): {total_enc}")
+    st.progress(min(total_enc/681, 1.0), text=f"Meta Normal (681): {total_enc}")
+    st.progress(min(total_enc/800, 1.0), text=f"Super Meta (800): {total_enc}")
     st.divider()
     
     dias_semana = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
