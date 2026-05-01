@@ -1,30 +1,10 @@
-import os
-import re
-import time
-import glob
-import shutil
-import calendar
-import unicodedata
-import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-from datetime import datetime, timedelta
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
-from streamlit_autorefresh import st_autorefresh
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import json
-from datetime import datetime
-import traceback
 
 def render():
-    st.title("📲 Gerador de Máscara Multi-Chip")
-    st.info("Preencha os dados abaixo para gerar a máscara de portabilidade formatada.")
+    st.title("📲 Gerador de Máscara Multi-Chip (Demo)")
+    st.info("💡 **Aviso de Portfólio:** Este módulo roda puramente no cliente e não requer banco de dados. Funcionalidade mantida em 100%.")
 
     col_cfg1, col_cfg2 = st.columns(2)
     with col_cfg1:
@@ -90,10 +70,7 @@ Cliente ciente do prazo de 24hs para a confirmação via sms?\nSIM (X)\nNÃO ( )
     st.subheader("📄 Máscara Gerada")
     st.code(mascara_final, language="text")
 
-    # Botão de Cópia
-    # Botão de Cópia com correção de escape
-    # Usamos json.dumps para garantir que quebras de linha não quebrem o JS
-    import json
+    # Botão de Cópia com correção de escape usando JSON
     safe_text = json.dumps(mascara_final)
 
     html_button = f"""
@@ -106,9 +83,7 @@ Cliente ciente do prazo de 24hs para a confirmação via sms?\nSIM (X)\nNÃO ( )
         </div>
         <script>
         document.getElementById('copyBtn').onclick = function() {{
-            const text = {safe_text}; // O texto já vem com aspas do json.dumps
-            
-            // Tentativa usando um elemento invisível (mais compatível com iframes)
+            const text = {safe_text};
             const textArea = document.createElement("textarea");
             textArea.value = text;
             textArea.style.position = "fixed";  // Evitar scroll
@@ -120,7 +95,13 @@ Cliente ciente do prazo de 24hs para a confirmação via sms?\nSIM (X)\nNÃO ( )
             
             try {{
                 document.execCommand('copy');
-                alert("Copiado com sucesso!");
+                const btn = document.getElementById('copyBtn');
+                btn.style.backgroundColor = '#28a745';
+                btn.innerText = '✅ COPIADO COM SUCESSO!';
+                setTimeout(() => {{ 
+                    btn.style.backgroundColor = '#4da3ff'; 
+                    btn.innerText = '📋 COPIAR MÁSCARA COMPLETA'; 
+                }}, 2000);
             }} catch (err) {{
                 console.error("Erro ao copiar", err);
             }}
