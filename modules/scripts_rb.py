@@ -1,9 +1,13 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import json
-import os
 import re
-from styles import apply_styles
+
+# Tenta importar os estilos (tratamento de erro para garantir funcionamento no cloud)
+try:
+    from styles import apply_styles
+except:
+    def apply_styles(): pass
 
 # --- CONFIGURAÇÃO DE MODELOS ---
 MAPA_TEMPLATES = {
@@ -12,6 +16,60 @@ MAPA_TEMPLATES = {
     "RB HAP": "rb_hap",
     "RB HAP AC": "rb_hap_ac",
 }
+
+# --- TEMPLATES MOCKADOS (Para proteger as configurações reais da empresa) ---
+TEMPLATES_MOCK = {
+    "rb_4011.rsc": """# Script MikroTik Gerado (Versão Portfólio)
+# Cliente: XXXCOD_NOMEXXX
+/interface pppoe-client
+add disabled=no interface=ether1 name=pppoe-out1 password=XXXSENHAPPPOEXXX user=XXXUSUARIOPPPOEXXX
+/interface bridge
+add name=Bridge_LAN
+XXXLINHAS_BRIDGEXXX
+/interface ethernet
+XXXLINHAS_ETHERNETXXX""",
+    
+    "rb_4011_hotspot.rsc": """# Script MikroTik Gerado (Versão Portfólio - HOTSPOT)
+# Cliente: XXXCOD_NOMEXXX
+/interface pppoe-client
+add disabled=no interface=ether1 name=pppoe-out1 password=XXXSENHAPPPOEXXX user=XXXUSUARIOPPPOEXXX
+/interface bridge
+add name=Bridge_LAN
+add name=Bridge_EasyAuth
+/interface ethernet
+XXXLINHAS_ETHERNETXXX
+/interface vlan
+XXXVLAN_1750_DINAMICAXXX
+XXXVLAN_1751_DINAMICAXXX
+/interface bridge port
+XXXLINHAS_BRIDGEXXX
+XXXLINHAS_BRIDGE_DINAMICAXXX""",
+
+    "rb_750_760.rsc": """# Script MikroTik Gerado (Versão Portfólio)
+# Cliente: XXXCOD_NOMEXXX
+/interface pppoe-client
+add disabled=no interface=ether1 name=pppoe-out1 password=XXXSENHAPPPOEXXX user=XXXUSUARIOPPPOEXXX""",
+
+    "rb_hap.rsc": """# Script MikroTik Gerado (Versão Portfólio)
+# Cliente: XXXCOD_NOMEXXX
+/interface pppoe-client
+add disabled=no interface=ether1 name=pppoe-out1 password=XXXSENHAPPPOEXXX user=XXXUSUARIOPPPOEXXX
+/interface wireless security-profiles
+set [ find default=yes ] wpa2-pre-shared-key=XXXWIFI_PASSXXX
+/interface wireless
+set [ find default-name=wlan1 ] ssid=XXXWIFI_NAMEXXX""",
+
+    "rb_hap_ac.rsc": """# Script MikroTik Gerado (Versão Portfólio)
+# Cliente: XXXCOD_NOMEXXX
+/interface pppoe-client
+add disabled=no interface=ether1 name=pppoe-out1 password=XXXSENHAPPPOEXXX user=XXXUSUARIOPPPOEXXX
+/interface wireless security-profiles
+set [ find default=yes ] wpa2-pre-shared-key=XXXWIFI_PASSXXX
+/interface wireless
+set [ find default-name=wlan1 ] ssid=XXXWIFI_NAMEXXX
+set [ find default-name=wlan2 ] ssid=XXXWIFI_5GHZ_NAMEXXX"""
+}
+
 
 def render():
     apply_styles()
@@ -28,19 +86,23 @@ def render():
             del st.session_state[k]
         st.rerun()
 
-    st.title("📝 Gerador de Configuração MikroTik")
+    st.title("📝 Gerador de Configuração MikroTik (Demo)")
+    st.info("💡 **Aviso de Portfólio:** Os arquivos `.rsc` reais contendo as políticas de rede e firewall da empresa foram substituídos por templates fictícios por motivos de segurança da informação.")
     st.divider()
+    
     # Botão de Reset
     st.write("")
     if st.button("🗑️ Limpar Todos os Campos", use_container_width=True):
         limpar_campos()
     st.divider()
+    
     # --- SELEÇÃO DE MODELO ---
     nome_modelo = st.selectbox(
         "📂 Selecione o Modelo de Roteador", 
         list(MAPA_TEMPLATES.keys()), 
         key=f"rb_modelo_sel_{st.session_state.reset_rb}"
     )
+    
     # --- INPUTS DO USUÁRIO ---
     col_dados, col_portas = st.columns([2, 1])
 
@@ -106,26 +168,17 @@ def render():
             l_bridge += f"add bridge=Bridge_LAN interface=ether{p}\n"
             l_bridge_dinamica += f"add bridge=Bridge_EasyAuth interface=Vlan1751_ether{p}\n"
 
-    # --- CARREGAMENTO DO TEMPLATE (CAMINHO AJUSTADO) ---
+    # --- CARREGAMENTO DO TEMPLATE SIMULADO ---
     sufixo = "_hotspot.rsc" if is_hotspot else ".rsc"
     arquivo_rsc = MAPA_TEMPLATES[nome_modelo] + sufixo
 
     try:
-        # Pega o caminho da pasta 'modules'
-        base_path = os.path.dirname(os.path.abspath(__file__))
+        # Puxa o script base do nosso dicionário Mock em vez de ler do arquivo
+        template_raw = TEMPLATES_MOCK.get(arquivo_rsc, "")
         
-        # Define o caminho para templates DENTRO de modules
-        caminho_final = os.path.normpath(os.path.join(base_path, "templates", arquivo_rsc))
-
-        # Verificação de existência
-        if not os.path.exists(caminho_final):
-            st.error(f"❌ Arquivo '{arquivo_rsc}' não encontrado!")
-            st.code(f"Tentativa de busca em: {caminho_final}", language="text")
-            st.warning("Verifique se a pasta 'templates' está dentro de 'modules'.")
+        if not template_raw:
+            st.error(f"❌ Template '{arquivo_rsc}' não encontrado no Mock!")
             return
-
-        with open(caminho_final, "r", encoding="utf-8") as f:
-            template_raw = f.read()
 
         # Substituições no template
         final_script = template_raw.replace("XXXCOD_NOMEXXX", cod_nome)\
@@ -139,6 +192,7 @@ def render():
             .replace("XXXVLAN_1751_DINAMICAXXX", v1751_bloco.strip())\
             .replace("XXXLINHAS_BRIDGEXXX", l_bridge.strip())\
             .replace("XXXLINHAS_BRIDGE_DINAMICAXXX", l_bridge_dinamica.strip())
+            
         # Componente de Cópia
         template_json = json.dumps(final_script)
         copy_html = f"""
@@ -163,8 +217,5 @@ def render():
         st.subheader("📄 Preview do Script")
         st.code(preview_display, language="bash")
 
-        
     except Exception as e:
-        st.error(f"Erro ao processar template: {e}")
-
-    
+        st.error(f"Erro ao processar template simulado: {e}")
