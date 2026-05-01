@@ -1,49 +1,15 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import json
 from datetime import datetime
 import pytz
-import traceback
-
-# --- FUNÇÃO DE CONEXÃO REVISADA E BLINDADA ---
-def conectar_google_sheets():
-    try:
-        # 1. Busca os Secrets (Tenta a chave 1 ou a chave 2 caso você tenha renomeado)
-        raw_creds = st.secrets.get("GOOGLE_JSON_CREDENTIALS") or st.secrets.get("GOOGLE_JSON_CREDENTIALS_2")
-        spreadsheet_url = st.secrets.get("URL_PLANILHA")
-        
-        if not raw_creds:
-            st.error("❌ Erro: Credenciais do Google não encontradas nos Secrets.")
-            return None
-        if not spreadsheet_url:
-            st.error("❌ Erro: URL da planilha não configurada.")
-            return None
-
-        # 2. Carrega e limpa a chave privada (Crucial para evitar Invalid JWT Signature)
-        creds_info = json.loads(raw_creds)
-        if "private_key" in creds_info:
-            creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
-        
-        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-        
-        # 3. Autenticação
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_info, scope)
-        client = gspread.authorize(creds)
-        
-        # 4. Abre a planilha (.strip() remove espaços invisíveis que quebram a conexão)
-        planilha = client.open_by_url(spreadsheet_url.strip())
-        return planilha.get_worksheet(0)
-        
-    except Exception as e:
-        st.error(f"❌ Erro na conexão: {str(e)}")
-        with st.expander("Ver Detalhes do Erro"):
-            st.code(traceback.format_exc())
-        return None
+import time
 
 def render():
-    # --- INICIALIZAÇÃO DE ESTADOS (LOGO NO INÍCIO) ---
+    st.title("📦 BATIDA DE CAIXA 3000 (Modo Demo)")
+    st.info("💡 **Aviso de Portfólio:** O salvamento na planilha real foi desativado. Você pode testar os inputs e o botão de copiar relatório livremente.")
+
+    # --- INICIALIZAÇÃO DE ESTADOS ---
     if 'batida_version' not in st.session_state:
         st.session_state.batida_version = 0
     if 'portas' not in st.session_state:
@@ -83,8 +49,6 @@ def render():
         st.session_state.portas = []
         st.session_state.batida_version += 1
         st.rerun()
-
-    st.title("📦 BATIDA DE CAIXA 3000")
 
     # --- CABEÇALHO ---
     c1, c2, c3, c_btn = st.columns([2, 2, 1, 0.5])
@@ -149,35 +113,7 @@ def render():
             if not st.session_state.batida_proto or not st.session_state.batida_cx:
                 st.error("Protocolo e Caixa são obrigatórios!")
             else:
-                with st.spinner("Conectando ao Google..."):
-                    aba = conectar_google_sheets()
-                    if aba:
-                        try:
-                            fuso_br = pytz.timezone('America/Sao_Paulo')
-                            data_hora = datetime.now(fuso_br).strftime("%d/%m/%Y %H:%M")
-                            
-                            # Preparamos os dados
-                            linha = [
-                                str(data_hora), 
-                                str(st.session_state.batida_proto), # Adicionei o técnico que faltava na sua lista anterior
-                                str(st.session_state.batida_cx), 
-                                str(portas_str)
-                            ]
-                            
-                            # --- SOLUÇÃO PARA ADICIONAR SEMPRE NO FINAL ---
-                            # O table_range garante que ele procure a próxima linha livre a partir da coluna A
-                            aba.append_row(
-                                linha, 
-                                value_input_option='USER_ENTERED',
-                                insert_data_option='INSERT_ROWS',
-                                table_range='A1'
-                            )
-                            
-                            st.toast("Registrado com sucesso!", icon="✅")
-                            st.balloons()
-                            
-                            # Opcional: Limpar campos após sucesso para evitar registros duplicados acidentais
-                            # limpar_campos() 
-                            
-                        except Exception as e:
-                            st.error(f"Erro ao inserir linha: {e}")
+                with st.spinner("Simulando conexão com o Google Sheets..."):
+                    time.sleep(1.5) # Simula o delay da rede
+                    st.toast("Registrado com sucesso na planilha simulada!", icon="✅")
+                    st.balloons()
