@@ -1,24 +1,11 @@
 import streamlit as st
 import pandas as pd
-import gspread
-import json
-import os
 import re
-import time
-import glob
-import shutil
 import calendar
 import unicodedata
 import pytz
 from datetime import datetime, timedelta
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.keys import Keys
-from streamlit_autorefresh import st_autorefresh
-from pathlib import Path
+import random
 
 st.set_page_config(layout="wide")
 
@@ -64,177 +51,53 @@ def formatar_segundos(segundos):
     if segundos is None or segundos <= 0: return "00:00:00"
     return str(timedelta(seconds=int(segundos)))
 
-# --- NOVO MECANISMO DE PLANILHA (VIA SECRETS) ---
+# --- 3. MOCKS PARA DEMONSTRAÇÃO (Substitui Google Sheets e Selenium) ---
 @st.cache_data(ttl=600, show_spinner=False)
-def carregar_tme_por_mes(mes_numero):
-    # Alterado de os.getenv para st.secrets
-    url = st.secrets["SPREADSHEET_URL"]
-    creds_json = st.secrets.get("GOOGLE_JSON_CREDENTIALS_2", st.secrets.get("GOOGLE_JSON_CREDENTIALS"))
+def carregar_tme_por_mes_mock(mes_numero):
+    """Simula os dados vindos da planilha do Google"""
+    dados_simulados = []
+    for nome in MAPEAMENTO_TECNICOS.values():
+        linha = [nome, "", ""] # Nome e colunas em branco que tinham na planilha original
+        for dia in range(1, 32):
+            # Gera tempos aleatórios, incluindo folgas ("FORA")
+            if random.random() < 0.15:
+                linha.append("FORA")
+            else:
+                m = random.randint(5, 25)
+                s = random.randint(0, 59)
+                linha.append(f"00:{m:02d}:{s:02d}")
+        dados_simulados.append(linha)
+    return dados_simulados
+
+@st.cache_data(ttl=900, show_spinner="🤖 Coletando base unificada do ERP (Modo Demo)...")
+def sincronizar_periodo_completo_mock():
+    """Simula a exportação de CSV do ERP com dados falsos"""
+    fuso = pytz.timezone('America/Sao_Paulo')
+    agora = datetime.now(fuso)
+    datas_simuladas = []
+    tecnicos_simulados = []
     
-    if not url or not creds_json: 
-        return None
-    try:
-        from google.oauth2.service_account import Credentials
-        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-        creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=scopes)
+    # Gera cerca de 1500 encerramentos divididos nos últimos 60 dias
+    tecnicos_list = list(MAPEAMENTO_TECNICOS.values())
+    for _ in range(1500):
+        dias_atras = random.randint(0, 60)
+        data_registro = agora - timedelta(days=dias_atras)
+        datas_simuladas.append(data_registro.strftime("%d/%m/%Y %H:%M:%S"))
+        tecnicos_simulados.append(random.choice(tecnicos_list))
         
-        cliente = gspread.authorize(creds)
-        planilha = cliente.open_by_url(url)
-        aba = planilha.worksheet("AtendimentoTécnico")
-        
-        aba.update_acell('B2', mes_numero)
-        time.sleep(4) 
-        
-        return aba.get("A8:AJ20")
-        
-    except Exception as e: 
-        st.error(f"Erro ao acessar Planilha (Mês {mes_numero}): {e}")
-        return None
+    return pd.DataFrame({
+        "Data Encerramento": datas_simuladas,
+        "Usuário Encerramento": tecnicos_simulados
+    })
 
-# --- 3. ROBÔ ERP ---
-def executar_robo_erp_periodo(dt_ini, dt_fim):
-    # Alterado para lidar com pastas de forma segura no servidor Linux da nuvem
-    download_path_raw = st.secrets.get("DOWNLOAD_PATH", "downloads").strip("/")
-    destino_path_raw = st.secrets.get("DESTINO_PATH", "destino").strip("/")
-    
-    DOWNLOAD_FOLDER = Path(download_path_raw).absolute()
-    DESTINO_FOLDER = Path(destino_path_raw).absolute()
-    DOWNLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-    DESTINO_FOLDER.mkdir(parents=True, exist_ok=True)
-
-    for f in glob.glob(str(DOWNLOAD_FOLDER / "*.csv")):
-        try: os.remove(f)
-        except: pass
-
-    # MODO HEADLESS ATIVADO PARA NUVEM
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new") # Crucial para servidor
-    chrome_options.add_argument("--no-sandbox") # Crucial para servidor
-    chrome_options.add_argument("--disable-dev-shm-usage") # Crucial para servidor
-    chrome_options.add_argument("--disable-gpu") # Extra segurança no Linux
-    chrome_options.add_argument("--window-size=1920,1080")
-    
-    abs_path = str(DOWNLOAD_FOLDER.absolute())
-    chrome_options.add_experimental_option("prefs", {"download.default_directory": abs_path})
-    
-    driver = webdriver.Chrome(options=chrome_options)
-    # Permite downloads mesmo no modo Headless
-    driver.execute_cdp_cmd("Page.setDownloadBehavior", {"behavior": "allow", "downloadPath": abs_path})
-    
-    wait = WebDriverWait(driver, 45)
-    
-    try: 
-        def forcar_input_react(elemento, valor):
-            script = """
-            var element = arguments[0]; var value = arguments[1]; var lastValue = element.value;
-            element.value = value; var event = new Event('input', { bubbles: true });
-            var tracker = element._valueTracker; if (tracker) { tracker.setValue(lastValue); }
-            element.dispatchEvent(event); element.dispatchEvent(new Event('change', { bubbles: true }));
-            """
-            driver.execute_script(script, elemento, valor)
-
-        # Login via Secrets
-        driver.get(st.secrets["URL_ERP"])
-        time.sleep(5)
-        try:
-            c_user = wait.until(EC.element_to_be_clickable((By.ID, ":r0:")))
-            c_pass = driver.find_element(By.ID, ":r1:")
-            forcar_input_react(c_user, st.secrets["ERP_USER"])
-            forcar_input_react(c_pass, st.secrets["ERP_PASS"]) 
-            driver.find_element(By.XPATH, "//button[@data-testid='button' and contains(., 'Entrar')]").click()
-            time.sleep(10)
-        except: pass
-
-        # Tela Antiga
-        try:
-            btn_ant = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Tela antiga']")))
-            driver.execute_script("arguments[0].click();", btn_ant)
-            time.sleep(6)
-        except: pass
-        
-        driver.get(st.secrets["URL_ERP"])
-        time.sleep(5)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@tooltip='Filtro avançado']"))).click()
-        time.sleep(3)
-        
-        # Filtros    
-        driver.find_element(By.ID, "teamId").click()
-        time.sleep(1)
-        f_all = wait.until(EC.element_to_be_clickable((By.ID, "filterAll")))
-        f_all.send_keys("COP Encerramentos")
-        f_all.send_keys(Keys.ENTER)
-        time.sleep(3)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='datagrid_row' and contains(text(), 'COP Encerramentos')]"))).click()
-        time.sleep(1)
-        driver.find_element(By.XPATH, "//button[contains(., 'Confirmar')]").click()
-
-        # Datas
-        data_ini_str = dt_ini.strftime("%d/%m/%Y")
-        data_fim_str = dt_fim.strftime("%d/%m/%Y")
-        
-        driver.execute_script("""
-            ['beginInitialDate', 'endInitialDate'].forEach(id => {
-                var el = document.getElementById(id);
-                if(el) { el.focus(); el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); el.blur(); }
-            });
-        """)
-        
-        forcar_input_react(driver.find_element(By.ID, "initialReportClosingDate"), data_ini_str)
-        forcar_input_react(driver.find_element(By.ID, "finalReportClosingDate"), data_fim_str)
-        
-        time.sleep(2)
-        driver.find_element(By.XPATH, "//button[contains(., 'aplicar')]").click()
-        time.sleep(15)
-
-        # EXPORTAÇÃO
-        btn_exp = wait.until(EC.presence_of_element_located((By.XPATH, "//button[@tooltip='Imprimir/Exportar']")))
-        driver.execute_script("arguments[0].click();", btn_exp)
-        wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., '.CSV')]"))).click()
-        
-        for _ in range(40):
-            arquivos = glob.glob(os.path.join(abs_path, "*.csv"))
-            if arquivos and not any(f.endswith('.crdownload') for f in arquivos):
-                recente = max(arquivos, key=os.path.getmtime)
-                dest = DESTINO_FOLDER / f"perf_periodo_completo.csv"
-                shutil.move(recente, str(dest))
-                return pd.read_csv(str(dest), sep=None, engine='python', encoding='latin-1')
-            time.sleep(2)
-            
-        return None
-    except Exception as e:
-        st.error(f"Erro ao coletar dados do ERP: {e}")
-        return None
-    finally:
-        time.sleep(8)   
-        driver.quit()
-
-# --- 4. INTERFACE ---
-
+# --- 4. LÓGICA MANTIDA ---
 def preparar_csv_consolidado(dados_tme_raw, df_bruto, mes, ano):
     try:
         df_mes = pd.DataFrame()
         if df_bruto is not None and not df_bruto.empty:
             df = df_bruto.copy()
-            col_data = None
-            for c in df.columns:
-                c_low = str(c).lower()
-                if "data" in c_low and ("encerrament" in c_low or "fechament" in c_low or "resolu" in c_low):
-                    col_data = c
-                    break
-            if not col_data:
-                cols_com_data = [c for c in df.columns if "data" in str(c).lower()]
-                col_data = cols_com_data[-1] if cols_com_data else df.columns[0]
-            
-            df['DATA_DT'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
-            
-            possiveis_cols = ["Usuário Encerramento", "Atendente", "Responsável", "Nome"]
-            col_atendente = next((c for p in possiveis_cols for c in df.columns if p.lower() in str(c).lower()), df.columns[3])
-            
-            df['Tec_Formatado'] = df[col_atendente].apply(lambda x: next(
-                (p_nome for p_nome, erp_nome in MAPEAMENTO_TECNICOS.items() 
-                 if super_limpeza(erp_nome) in super_limpeza(str(x))), 
-                None
-            ))
+            df['DATA_DT'] = pd.to_datetime(df['Data Encerramento'], dayfirst=True, errors='coerce')
+            df['Tec_Formatado'] = df['Usuário Encerramento']
             df_mes = df[(df['DATA_DT'].dt.month == mes) & (df['DATA_DT'].dt.year == ano)]
 
         counts_geral = df_mes['Tec_Formatado'].value_counts().to_dict() if not df_mes.empty else {}
@@ -242,12 +105,13 @@ def preparar_csv_consolidado(dados_tme_raw, df_bruto, mes, ano):
 
         lista_relatorio = []
         for nome_tecnico in MAPEAMENTO_TECNICOS.keys():
-            tempos_raw = mapa_tme.get(nome_tecnico, [])
+            nome_formatado = MAPEAMENTO_TECNICOS[nome_tecnico]
+            tempos_raw = mapa_tme.get(nome_formatado, [])
             segundos_validos = [converter_para_segundos(t) for t in tempos_raw]
             segundos_validos = [s for s in segundos_validos if s is not None]
             media_seg = sum(segundos_validos) / len(segundos_validos) if segundos_validos else 0
             
-            total_e = counts_geral.get(nome_tecnico, 0)
+            total_e = counts_geral.get(nome_formatado, 0)
             
             lista_relatorio.append({
                 "Colaborador": nome_tecnico,
@@ -262,56 +126,14 @@ def preparar_csv_consolidado(dados_tme_raw, df_bruto, mes, ano):
         st.error(f"Erro ao gerar CSV: {e}")
         return None
 
-@st.cache_data(ttl=900, show_spinner="🤖 Coletando base unificada do ERP (Mês Passado e Atual)...")
-def sincronizar_periodo_completo():
-    fuso = pytz.timezone('America/Sao_Paulo')
-    agora = datetime.now(fuso)
-    
-    primeiro_dia_atual = agora.replace(day=1)
-    ultimo_dia_passado = primeiro_dia_atual - timedelta(days=1)
-    dt_ini = ultimo_dia_passado.replace(day=1)
-    
-    ultimo_dia_atual_num = calendar.monthrange(agora.year, agora.month)[1]
-    dt_fim = agora.replace(day=ultimo_dia_atual_num)
-    
-    return executar_robo_erp_periodo(dt_ini, dt_fim)
-
 def desenhar_aba(dados_tme_raw, df_bruto, tecnico_sel, mes, ano, dia_limite):
     counts = {}
     total_enc = 0
     
     if df_bruto is not None and not df_bruto.empty:
         df = df_bruto.copy()
-        
-        col_data = None
-        for c in df.columns:
-            c_low = str(c).lower()
-            if "data" in c_low and ("encerrament" in c_low or "fechament" in c_low or "resolu" in c_low):
-                col_data = c
-                break
-                
-        if not col_data:
-            for c in df.columns:
-                if "encerrament" in str(c).lower() or "fechament" in str(c).lower():
-                    col_data = c
-                    break
-                    
-        if not col_data:
-            cols_com_data = [c for c in df.columns if "data" in str(c).lower()]
-            col_data = cols_com_data[-1] if cols_com_data else df.columns[0]
-        
-        df['DATA_DT'] = pd.to_datetime(df[col_data], dayfirst=True, errors='coerce')
-        
-        possiveis_cols = ["Usuário Encerramento", "Usuario Encerramento", "Atendente", "Responsável", "Responsavel", "Nome", "Técnico", "Tecnico"]
-        col_atendente = next((c for p in possiveis_cols for c in df.columns if p.lower() in str(c).lower()), None)
-        if not col_atendente:
-            col_atendente = df.columns[3] if len(df.columns) > 3 else df.columns[0]
-        
-        df['Tec_Formatado'] = df[col_atendente].apply(lambda x: next(
-            (p_nome for p_nome, erp_nome in MAPEAMENTO_TECNICOS.items() 
-             if super_limpeza(erp_nome) in super_limpeza(str(x))), 
-            None
-        ))
+        df['DATA_DT'] = pd.to_datetime(df['Data Encerramento'], dayfirst=True, errors='coerce')
+        df['Tec_Formatado'] = df['Usuário Encerramento']
         
         df_tec = df[
             (df['Tec_Formatado'] == tecnico_sel) & 
@@ -395,7 +217,6 @@ def desenhar_aba(dados_tme_raw, df_bruto, tecnico_sel, mes, ano, dia_limite):
                     dia_atual += 1
 
 def render():
-    st_autorefresh(interval=15 * 60 * 1000, key="refresh_perf")
     fuso = pytz.timezone('America/Sao_Paulo')
     agora = datetime.now(fuso)
     
@@ -403,21 +224,17 @@ def render():
     dt_p = agora.replace(day=1) - timedelta(days=1)
     mes_passado = dt_p.month
     
-    st.markdown("### 📈 Painel de Performance Operacional")
+    st.markdown("### 📈 Painel de Performance Operacional (Modo Demo)")
+    st.info("💡 **Aviso de Portfólio:** Os dados apresentados neste calendário (Tempos Médios e Volumes) são gerados aleatoriamente para demonstrar a capacidade de renderização visual e processamento de datas do sistema.")
     
-    with st.spinner("⏳ Sincronizando Planilhas..."):
-        dados_planilha_historico = carregar_tme_por_mes(mes_passado)
-        dados_planilha_atual = carregar_tme_por_mes(mes_atual)
-    
-    if not dados_planilha_atual: 
-        st.error("Falha ao carregar Planilha Google.")
-        return
+    with st.spinner("⏳ Sincronizando dados simulados..."):
+        dados_planilha_historico = carregar_tme_por_mes_mock(mes_passado)
+        dados_planilha_atual = carregar_tme_por_mes_mock(mes_atual)
+        df_bruto_unificado = sincronizar_periodo_completo_mock()
         
-    nomes = sorted([l[0] for l in dados_planilha_atual if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS])
+    nomes = sorted([l[0] for l in dados_planilha_atual if len(l) > 0 and l[0] in MAPEAMENTO_TECNICOS.values()])
     
     selecionado = st.selectbox("Selecione o Técnico:", nomes, label_visibility="collapsed")
-
-    df_bruto_unificado = sincronizar_periodo_completo()
     
     tab1, tab2 = st.tabs([f"📅 Mês Atual ({mes_atual:02d}/{agora.year})", f"⏪ Mês Anterior ({mes_passado:02d}/{dt_p.year})"])
 
